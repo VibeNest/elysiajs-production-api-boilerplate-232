@@ -1,5 +1,7 @@
 import { Elysia } from "elysia";
+import { recordAudit } from "@/lib/audit";
 import { ForbiddenError } from "@/lib/errors";
+import { clientIp } from "@/lib/ip";
 import { authPlugin } from "@/plugins/auth";
 import { userRateLimit } from "@/plugins/rate-limit";
 import { userModel } from "./model";
@@ -45,11 +47,21 @@ export const userModule = new Elysia({ prefix: "/users", tags: ["Users"] })
   })
   .patch(
     "/:id",
-    ({ params, body, scope }) => {
+    async ({ params, body, scope, user, request, server }) => {
       // Only "all" scope (e.g. admin) may change a role.
       if (scope !== "all" && body.role !== undefined)
         throw new ForbiddenError("Only admins can change roles");
-      return UserService.update(params.id, body);
+      const updated = await UserService.update(params.id, body);
+      if (body.role !== undefined)
+        await recordAudit({
+          action: "user.role_changed",
+          actorId: user.sub,
+          targetType: "user",
+          targetId: params.id,
+          metadata: { role: body.role },
+          ip: clientIp(request, server),
+        });
+      return updated;
     },
     {
       can: { action: "user:update", ownParam: "id" },
@@ -63,12 +75,26 @@ export const userModule = new Elysia({ prefix: "/users", tags: ["Users"] })
       },
     },
   )
-  .delete("/:id", ({ params }) => UserService.remove(params.id), {
-    can: { action: "user:delete", ownParam: "id" },
-    params: "idParam",
-    detail: {
-      summary: "Delete a user (self or admin)",
-      tags: ["Users"],
-      security: [{ bearerAuth: [] }],
+  .delete(
+    "/:id",
+    async ({ params, user, request, server }) => {
+      const result = await UserService.remove(params.id);
+      await recordAudit({
+        action: "user.deleted",
+        actorId: user.sub,
+        targetType: "user",
+        targetId: params.id,
+        ip: clientIp(request, server),
+      });
+      return result;
     },
-  });
+    {
+      can: { action: "user:delete", ownParam: "id" },
+      params: "idParam",
+      detail: {
+        summary: "Delete a user (self or admin)",
+        tags: ["Users"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+  );

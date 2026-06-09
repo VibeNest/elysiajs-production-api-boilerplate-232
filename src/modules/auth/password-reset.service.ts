@@ -1,3 +1,4 @@
+import { recordAudit } from "@/lib/audit";
 import { cache } from "@/lib/cache";
 import { BadRequestError } from "@/lib/errors";
 import { sha256Hex } from "@/lib/hash";
@@ -81,5 +82,12 @@ export abstract class PasswordResetService {
     await AuthService.updatePassword(user.id, newPassword);
     // Password changed — invalidate every existing session.
     await AuthService.revokeAllRefreshTokens(user.id);
+
+    await recordAudit({
+      action: "auth.password_reset",
+      actorId: user.id,
+      targetType: "user",
+      targetId: user.id,
+    });
   }
 }

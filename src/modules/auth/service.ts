@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { refreshTokens, users } from "@/db/schema";
+import { recordAudit } from "@/lib/audit";
 import { ConflictError, UnauthorizedError } from "@/lib/errors";
 import { sha256Hex } from "@/lib/hash";
 import { logger } from "@/lib/logger";
@@ -128,6 +129,12 @@ export abstract class AuthService {
         { userId: row.userId, familyId: row.familyId },
         "refresh token reuse detected — token family revoked",
       );
+      await recordAudit({
+        action: "security.token_reuse_detected",
+        actorId: row.userId,
+        targetType: "refresh_token_family",
+        targetId: row.familyId,
+      });
       throw new UnauthorizedError("Refresh token reuse detected");
     }
 

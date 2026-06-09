@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import { env } from "@/config/env";
+import { recordAudit } from "@/lib/audit";
 import { BadRequestError, UnauthorizedError } from "@/lib/errors";
+import { clientIp } from "@/lib/ip";
 import { durationToMs } from "@/lib/time";
 import { authPlugin } from "@/plugins/auth";
 import { ipRateLimit } from "@/plugins/rate-limit";
@@ -36,12 +38,19 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   .model(authModel)
   .post(
     "/register",
-    async ({ body, jwt, refreshJwt }) => {
+    async ({ body, jwt, refreshJwt, request, server }) => {
       const user = await AuthService.createUser(
         body.email,
         body.password,
         body.name,
       );
+      await recordAudit({
+        action: "user.created",
+        actorId: user.id,
+        targetType: "user",
+        targetId: user.id,
+        ip: clientIp(request, server),
+      });
 
       const accessToken = await jwt.sign({
         sub: user.id,
