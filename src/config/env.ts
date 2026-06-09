@@ -25,6 +25,9 @@ const EnvSchema = t.Object({
   // Comma-separated list of allowed origins, or "*" for any.
   CORS_ORIGIN: t.String({ default: "*" }),
 
+  // Log level: trace | debug | info | warn | error | fatal | silent.
+  LOG_LEVEL: t.String({ default: "info" }),
+
   // Redis connection string (caching, OTP storage).
   REDIS_URL: t.String({ default: "redis://localhost:6379" }),
 

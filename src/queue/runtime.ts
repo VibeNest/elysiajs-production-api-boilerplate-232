@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import { logger } from "../lib/logger";
 import { connection } from "./connection";
 import type { QueueDef } from "./define";
 
@@ -18,7 +19,7 @@ export function startWorker<T>(q: QueueDef<T>): Worker<T> {
   });
 
   worker.on("failed", (job, err) =>
-    console.error(`❌ [${q.name}] job ${job?.id} failed: ${err.message}`),
+    logger.error({ queue: q.name, jobId: job?.id, err }, "queue job failed"),
   );
 
   return worker;

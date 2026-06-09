@@ -12,6 +12,7 @@ tests, Docker and CI.
 - **Cache:** Redis (Bun's built-in client) — caching + OTP storage
 - **Queue:** BullMQ (Redis) — background jobs (email) with retries; separate worker process
 - **Email:** SMTP via nodemailer (Mailtrap-ready); logs to console in dev without creds
+- **Logging:** Pino — pretty in dev, JSON in prod (stdout → any log aggregator); `LOG_LEVEL` configurable
 - **Auth:** Custom JWT (access + rotating refresh) + Bearer, `Bun.password` (argon2id) hashing, permission model + email verification (OTP)
 - **Docs:** OpenAPI at `/openapi`
 - **Quality:** Biome (lint + format), `bun test`
@@ -49,7 +50,7 @@ src/
 ├── modules/          # feature modules (auth, user) — each = controller/service/model
 ├── queue/            # BullMQ email queue + worker runtime
 ├── worker.ts         # background worker entrypoint
-└── lib/              # shared helpers (errors, time, cache, mailer)
+└── lib/              # shared helpers (errors, time, cache, mailer, logger)
 test/                 # bun:test integration tests via app.handle()
 ```
 

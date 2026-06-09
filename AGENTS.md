@@ -38,7 +38,7 @@ src/
 ├── worker.ts         # background worker entrypoint (separate process)
 ├── plugins/          # cross-cutting: cors, openapi, error, logger, auth
 ├── modules/<feature>/  # index.ts (routes) · service.ts (logic) · model.ts (schemas)
-└── lib/              # errors.ts, time.ts, permissions.ts, cache.ts (Redis), mailer.ts
+└── lib/              # errors, time, permissions, cache (Redis), mailer, logger (Pino)
 ```
 
 ## Adding a new module (recipe)
@@ -135,6 +135,21 @@ not-found-route (404) and parse (400) are handled automatically.
   emails a 6-digit code (stored hashed in Redis, 10m TTL, 60s resend cooldown,
   5-attempt cap); `POST /auth/email/verify` checks it and sets `emailVerifiedAt`.
   Logic in [modules/auth/otp.service.ts](src/modules/auth/otp.service.ts).
+
+## Logging
+
+- Structured logging via **Pino** ([src/lib/logger.ts](src/lib/logger.ts)). Dev →
+  human-readable (pino-pretty); prod → single-line JSON on stdout (for
+  Loki/Datadog/CloudWatch); tests → silent. Level via `LOG_LEVEL`.
+- **Never use `console.*`** — use `logger` (app-wide) or a child logger. The one
+  exception is [config/env.ts](src/config/env.ts), which runs before the logger exists.
+- In request handlers/services, prefer the request-scoped `log` from the context
+  (added by [plugins/logger.ts](src/plugins/logger.ts)) — it carries `requestId`
+  for correlation: `({ log }) => log.info({ userId }, "did a thing")`. Outside a
+  request, use the root `logger` or `createLogger({ module: "..." })`.
+- Pass structured fields as the first arg, message second:
+  `logger.error({ err, jobId }, "queue job failed")`. Secrets (auth header,
+  password, tokens) are redacted automatically.
 
 ## Caching (Redis)
 

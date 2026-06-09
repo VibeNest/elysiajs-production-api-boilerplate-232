@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { isProduction } from "../config/env";
 import { AppError } from "../lib/errors";
+import { logger } from "../lib/logger";
 
 /**
  * Centralized error handling. Maps domain errors (AppError) and framework
@@ -32,7 +33,7 @@ export const errorPlugin = new Elysia({ name: "error" }).onError(
     }
 
     // Unexpected error — log it and hide internals in production.
-    console.error(error);
+    logger.error({ err: error, code }, "unhandled error");
     set.status = 500;
     return {
       error: "INTERNAL",

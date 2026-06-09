@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { env, isProduction, isTest } from "../config/env";
+import { logger } from "./logger";
 
 export interface Mail {
   to: string;
@@ -27,8 +28,8 @@ function resolveMode(): "capture" | "log" | "smtp" {
         : "log"
       : env.MAIL_TRANSPORT;
   if (mode === "smtp" && (!env.SMTP_HOST || !env.SMTP_USER)) {
-    console.warn(
-      "⚠️  MAIL_TRANSPORT=smtp but SMTP_HOST/SMTP_USER missing — logging emails to console instead",
+    logger.warn(
+      "MAIL_TRANSPORT=smtp but SMTP_HOST/SMTP_USER missing — logging emails instead",
     );
     return "log";
   }
@@ -50,8 +51,14 @@ const transporter =
 const transports: Record<"capture" | "log" | "smtp", Transport> = {
   capture: async () => {},
   log: async (mail) => {
-    console.log(
-      `📧 [mail] from=${env.EMAIL_FROM} to=${mail.to} subject="${mail.subject}"\n${mail.text}`,
+    logger.info(
+      {
+        to: mail.to,
+        subject: mail.subject,
+        from: env.EMAIL_FROM,
+        body: mail.text,
+      },
+      "email (log transport)",
     );
   },
   smtp: async (mail) => {

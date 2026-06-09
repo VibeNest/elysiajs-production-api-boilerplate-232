@@ -2,18 +2,19 @@ import { app } from "./app";
 import { env } from "./config/env";
 import { queryClient } from "./db";
 import { redis } from "./lib/cache";
+import { logger } from "./lib/logger";
 import { emailQueue } from "./queue/email.queue";
 
 app.listen(env.PORT, () => {
-  console.log(
-    `🦊 Elysia running at http://localhost:${env.PORT} (${env.NODE_ENV})`,
+  logger.info(
+    { port: env.PORT, env: env.NODE_ENV, docs: `/openapi` },
+    `🦊 Elysia running at http://localhost:${env.PORT}`,
   );
-  console.log(`📚 OpenAPI docs at http://localhost:${env.PORT}/openapi`);
 });
 
 // Graceful shutdown: stop accepting requests, then close the DB pool.
 const shutdown = async (signal: string) => {
-  console.log(`\n${signal} received — shutting down...`);
+  logger.info({ signal }, "shutting down");
   await app.stop();
   await queryClient.end({ timeout: 5 });
   redis.close();

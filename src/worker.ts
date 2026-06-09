@@ -1,3 +1,4 @@
+import { logger } from "./lib/logger";
 import { emailQueue } from "./queue/email.queue";
 import { startWorker } from "./queue/runtime";
 
@@ -5,10 +6,10 @@ import { startWorker } from "./queue/runtime";
 // (dev) or as a separate container in production (see docker-compose.prod.yml).
 const workers = [startWorker(emailQueue)];
 
-console.log(`🛠️  Worker ready — processing queues: ${emailQueue.name}`);
+logger.info({ queues: [emailQueue.name] }, "🛠️  worker ready");
 
 const shutdown = async (signal: string) => {
-  console.log(`\n${signal} received — shutting down worker...`);
+  logger.info({ signal }, "shutting down worker");
   await Promise.all(workers.map((w) => w.close()));
   process.exit(0);
 };
