@@ -2,6 +2,7 @@ import { and, eq, gt } from "drizzle-orm";
 import { db } from "@/db";
 import { refreshTokens, users } from "@/db/schema";
 import { ConflictError, UnauthorizedError } from "@/lib/errors";
+import { sha256Hex } from "@/lib/hash";
 
 /**
  * Request-independent auth logic: password hashing and all database access.
@@ -55,7 +56,10 @@ export abstract class AuthService {
     token: string,
     expiresAt: Date,
   ) {
-    await db.insert(refreshTokens).values({ userId, token, expiresAt });
+    // Store only the hash — a DB leak then can't hand out usable tokens.
+    await db
+      .insert(refreshTokens)
+      .values({ userId, token: sha256Hex(token), expiresAt });
   }
 
   /** Validate a refresh token exists & isn't expired, then delete it (rotation). */
@@ -65,7 +69,7 @@ export abstract class AuthService {
       .from(refreshTokens)
       .where(
         and(
-          eq(refreshTokens.token, token),
+          eq(refreshTokens.token, sha256Hex(token)),
           gt(refreshTokens.expiresAt, new Date()),
         ),
       )
@@ -78,7 +82,9 @@ export abstract class AuthService {
   }
 
   static async revokeRefreshToken(token: string) {
-    await db.delete(refreshTokens).where(eq(refreshTokens.token, token));
+    await db
+      .delete(refreshTokens)
+      .where(eq(refreshTokens.token, sha256Hex(token)));
   }
 
   static async markEmailVerified(userId: string) {
