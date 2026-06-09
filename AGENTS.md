@@ -120,8 +120,42 @@ not-found-route (404) and parse (400) are handled automatically.
 - **Every refresh token must carry a unique `jti`** (`crypto.randomUUID()`) when
   signed. Without it, two tokens signed for the same user in the same second are
   byte-identical and violate the `token` unique constraint.
-- Protect routes with macros from `plugins/auth.ts`: `{ isAuthed: true }` or
-  `{ hasRole: 'admin' }`. On success they add a typed `user` to the context.
+- Route guards (macros from `plugins/auth.ts`), simplest → most flexible:
+  - `{ isAuthed: true }` — any authenticated user.
+  - `{ hasRole: 'admin' }` — exact role gate.
+  - `{ can: { action: '<model>:<operation>', ownParam? } }` — **permission gate**
+    (preferred for resources). All add a typed `user` to the context; `can` also
+    adds `scope: 'all' | 'own'`.
+
+## Permissions
+
+Permission strings are `<model>:<operation>:<scope>` (e.g. `user:update:own`),
+defined in [src/lib/permissions.ts](src/lib/permissions.ts).
+
+- **scope `all`** → may act on any record; **scope `own`** → only records the
+  requester owns.
+- `ROLE_PERMISSIONS` maps each role to its grants (`'*'` = superuser, all at
+  `all` scope). The JWT carries only `role`; permissions are resolved per request
+  via `resolveScope(role, model, operation)` — change a role's grants and it
+  takes effect immediately, no token reissue.
+- The `can` macro resolves the granted `scope`. With `ownParam` it enforces
+  param-based ownership for "own" scope (route param === user id); admins ("all")
+  bypass. For row-level ownership (e.g. `post.userId`), use the resolved `scope`
+  inside the handler/service to filter.
+- **Field-level rules go in the handler**, keyed on `scope` — e.g. user PATCH
+  rejects changing `role` unless `scope === 'all'` (see
+  [modules/user/index.ts](src/modules/user/index.ts)). Keep services pure; the
+  controller decides authorization.
+- To grant a new resource's permissions, add `'<model>:<op>:<scope>'` entries to
+  the relevant role in `ROLE_PERMISSIONS`.
+
+## Gotchas
+
+- **`await` DB queries in handlers.** Drizzle query builders are *thenables*, not
+  native Promises. Returning one straight from a route makes Elysia's response
+  validation run on the unresolved query (array responses fail with a confusing
+  "Expected object"). Service methods are `async`; `await` them in the handler so
+  the response schema validates resolved data.
 
 ## Code style
 

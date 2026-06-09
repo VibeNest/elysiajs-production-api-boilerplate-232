@@ -17,8 +17,16 @@ const publicColumns = {
  * starting point for new resources.
  */
 export abstract class UserService {
-  static list(limit = 20, offset = 0) {
-    return db.select(publicColumns).from(users).limit(limit).offset(offset);
+  // All service methods are async — callers should `await` the result rather
+  // than return the Drizzle query builder (a thenable) straight to a route, so
+  // Elysia validates resolved data (notably for array responses).
+  static async list(limit = 20, offset = 0, ownerId?: string) {
+    return db
+      .select(publicColumns)
+      .from(users)
+      .where(ownerId ? eq(users.id, ownerId) : undefined)
+      .limit(limit)
+      .offset(offset);
   }
 
   static async getById(id: string) {

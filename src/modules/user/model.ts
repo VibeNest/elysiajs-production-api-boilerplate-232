@@ -5,14 +5,20 @@ import { dbSchema } from "../../db/model";
 // (single source of truth — see db/model.ts).
 const cols = dbSchema.select.users;
 
+const publicUser = t.Object({
+  id: cols.id,
+  email: cols.email,
+  name: cols.name,
+  role: cols.role,
+  createdAt: cols.createdAt,
+});
+
 export const userModel = {
-  publicUser: t.Object({
-    id: cols.id,
-    email: cols.email,
-    name: cols.name,
-    role: cols.role,
-    createdAt: cols.createdAt,
-  }),
+  publicUser,
+  // Array responses are registered as their own named model — referencing a
+  // model that carries a `$id` inline inside t.Array() breaks Elysia's response
+  // validator, so we register the list shape and reference it by name.
+  userList: t.Array(publicUser),
   listQuery: t.Object({
     limit: t.Optional(t.Number({ minimum: 1, maximum: 100, default: 20 })),
     offset: t.Optional(t.Number({ minimum: 0, default: 0 })),
