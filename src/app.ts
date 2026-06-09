@@ -3,8 +3,10 @@ import { authModule } from "./modules/auth";
 import { userModule } from "./modules/user";
 import { corsPlugin } from "./plugins/cors";
 import { errorPlugin } from "./plugins/error";
+import { healthPlugin } from "./plugins/health";
 import { loggerPlugin } from "./plugins/logger";
 import { openapiPlugin } from "./plugins/openapi";
+import { securityHeadersPlugin } from "./plugins/security-headers";
 
 /**
  * The composed application — no `.listen()` so it can be imported directly in
@@ -12,13 +14,12 @@ import { openapiPlugin } from "./plugins/openapi";
  * starts the server.
  */
 export const app = new Elysia()
+  .use(securityHeadersPlugin)
   .use(corsPlugin)
   .use(openapiPlugin)
   .use(loggerPlugin)
   .use(errorPlugin)
-  .get("/health", () => ({ status: "ok", uptime: process.uptime() }), {
-    detail: { summary: "Health check", tags: ["App"] },
-  })
+  .use(healthPlugin)
   .use(authModule)
   .use(userModule);
 
