@@ -6,6 +6,7 @@ import { authPlugin } from "@/plugins/auth";
 import { ipRateLimit } from "@/plugins/rate-limit";
 import { authModel } from "./model";
 import { OtpService } from "./otp.service";
+import { PasswordResetService } from "./password-reset.service";
 import { AuthService } from "./service";
 
 const REFRESH_MS = durationToMs(env.JWT_REFRESH_EXP) || durationToMs("7d");
@@ -130,6 +131,35 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       response: "tokenResponse",
       detail: {
         summary: "Exchange a refresh token for new tokens",
+        tags: ["Auth"],
+      },
+    },
+  )
+  .post(
+    "/password/request-reset",
+    async ({ body }) => {
+      // Always returns the same shape — never reveals whether the email exists.
+      await PasswordResetService.request(body.email);
+      return { sent: true };
+    },
+    {
+      body: "requestPasswordResetBody",
+      detail: {
+        summary: "Request a password-reset code by email",
+        tags: ["Auth"],
+      },
+    },
+  )
+  .post(
+    "/password/reset",
+    async ({ body }) => {
+      await PasswordResetService.reset(body.email, body.code, body.password);
+      return { reset: true };
+    },
+    {
+      body: "resetPasswordBody",
+      detail: {
+        summary: "Reset the password using an emailed code",
         tags: ["Auth"],
       },
     },

@@ -26,6 +26,14 @@ export const authModel = {
   verifyOtpBody: t.Object({
     code: t.String({ minLength: 6, maxLength: 6 }),
   }),
+  requestPasswordResetBody: t.Object({
+    email: t.String({ format: "email" }),
+  }),
+  resetPasswordBody: t.Object({
+    email: t.String({ format: "email" }),
+    code: t.String({ minLength: 6, maxLength: 6 }),
+    password: t.String({ minLength: 8, maxLength: 128 }),
+  }),
   tokenResponse: t.Object({
     accessToken: t.String(),
     refreshToken: t.String(),

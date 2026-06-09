@@ -36,6 +36,26 @@ export abstract class AuthService {
     return user;
   }
 
+  static async findByEmail(email: string) {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    return user;
+  }
+
+  /** Set a new password (hashed). Used by the password-reset flow. */
+  static async updatePassword(userId: string, password: string) {
+    const passwordHash = await Bun.password.hash(password);
+    await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+  }
+
+  /** Revoke every refresh token for a user (e.g. after a password reset). */
+  static async revokeAllRefreshTokens(userId: string) {
+    await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+  }
+
   static async verifyCredentials(email: string, password: string) {
     const [user] = await db
       .select()
