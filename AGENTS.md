@@ -38,7 +38,7 @@ src/
 ├── worker.ts         # background worker entrypoint (separate process)
 ├── plugins/          # cross-cutting: cors, openapi, error, logger, auth
 ├── modules/<feature>/  # index.ts (routes) · service.ts (logic) · model.ts (schemas)
-└── lib/              # errors, time, permissions, cache (Redis), mailer, logger (Pino)
+└── lib/              # errors, time, permissions, cache, mailer, logger, sanitize
 ```
 
 ## Adding a new module (recipe)
@@ -215,6 +215,19 @@ defined in [src/lib/permissions.ts](src/lib/permissions.ts).
   controller decides authorization.
 - To grant a new resource's permissions, add `'<model>:<op>:<scope>'` entries to
   the relevant role in `ROLE_PERMISSIONS`.
+
+## Input sanitization (XSS)
+
+- Free-text user fields are sanitized **at input** with `sanitizedString()`
+  ([src/lib/sanitize.ts](src/lib/sanitize.ts)) — a TypeBox transform that strips all
+  HTML/script via `sanitize-html`. Use it in models for names/titles/bios, e.g.
+  `name: t.Optional(sanitizedString({ maxLength: 255 }))`.
+- **Don't** sanitize passwords, tokens, OTP codes, or format-validated fields
+  (email, uuid) — only human free text. For fields that legitimately hold rich
+  HTML, write a dedicated allowlist transform instead of `sanitizedString`.
+- This is defense-in-depth; the primary XSS defense is output-encoding wherever
+  the data is rendered (the client). A JSON API with `application/json` doesn't
+  execute scripts itself.
 
 ## Gotchas
 

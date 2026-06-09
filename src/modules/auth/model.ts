@@ -1,4 +1,5 @@
 import { t } from "elysia";
+import { sanitizedString } from "../../lib/sanitize";
 
 /** Public-safe representation of a user (never includes the password hash). */
 export const publicUser = t.Object({
@@ -13,7 +14,7 @@ export const authModel = {
   registerBody: t.Object({
     email: t.String({ format: "email" }),
     password: t.String({ minLength: 8, maxLength: 128 }),
-    name: t.Optional(t.String({ maxLength: 255 })),
+    name: t.Optional(sanitizedString({ maxLength: 255 })),
   }),
   loginBody: t.Object({
     email: t.String({ format: "email" }),

@@ -1,5 +1,6 @@
 import { t } from "elysia";
 import { dbSchema } from "../../db/model";
+import { sanitizedString } from "../../lib/sanitize";
 
 // Compose request/response schemas from the Drizzle-derived column schemas
 // (single source of truth — see db/model.ts).
@@ -25,7 +26,7 @@ export const userModel = {
     offset: t.Optional(t.Number({ minimum: 0, default: 0 })),
   }),
   updateUserBody: t.Object({
-    name: t.Optional(t.String({ maxLength: 255 })),
+    name: t.Optional(sanitizedString({ maxLength: 255 })),
     role: t.Optional(t.Union([t.Literal("user"), t.Literal("admin")])),
   }),
   idParam: t.Object({
