@@ -15,6 +15,11 @@ const EnvSchema = t.Object({
 
   // Postgres connection string, e.g. postgres://user:pass@localhost:5432/app
   DATABASE_URL: t.String({ minLength: 1 }),
+  // Connection pool tuning (postgres.js). Size the pool to your DB's
+  // max_connections divided across API + worker replicas.
+  DB_POOL_MAX: t.Number({ default: 10 }),
+  DB_IDLE_TIMEOUT: t.Number({ default: 30 }), // seconds before an idle conn closes
+  DB_CONNECT_TIMEOUT: t.Number({ default: 30 }), // seconds to wait for a connection
 
   // Auth secrets — keep these long and random in production.
   JWT_SECRET: t.String({ minLength: 16 }),
