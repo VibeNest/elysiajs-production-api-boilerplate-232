@@ -5,12 +5,20 @@ import { redis } from "./lib/cache";
 import { logger } from "./lib/logger";
 import { emailQueue } from "./queue/email.queue";
 
-app.listen(env.PORT, () => {
-  logger.info(
-    { port: env.PORT, env: env.NODE_ENV, docs: `/openapi` },
-    `🦊 Elysia running at http://localhost:${env.PORT}`,
-  );
-});
+app.listen(
+  {
+    port: env.PORT,
+    // Bun.serve hardening: cap request body size and idle connection time.
+    maxRequestBodySize: env.MAX_BODY_SIZE,
+    idleTimeout: env.REQUEST_IDLE_TIMEOUT,
+  },
+  () => {
+    logger.info(
+      { port: env.PORT, env: env.NODE_ENV, docs: `/openapi` },
+      `🦊 Elysia running at http://localhost:${env.PORT}`,
+    );
+  },
+);
 
 // Graceful shutdown: stop accepting requests, then close the DB pool.
 const shutdown = async (signal: string) => {

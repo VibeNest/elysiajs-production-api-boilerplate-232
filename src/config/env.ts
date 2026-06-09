@@ -36,6 +36,11 @@ const EnvSchema = t.Object({
   // Trust X-Forwarded-For for client IP (enable behind a proxy/load balancer).
   TRUST_PROXY: t.Boolean({ default: false }),
 
+  // Max request body size in bytes (Bun rejects larger with 413). Default 1 MiB.
+  MAX_BODY_SIZE: t.Number({ default: 1024 * 1024 }),
+  // Connection idle timeout in seconds (Bun.serve idleTimeout, max 255).
+  REQUEST_IDLE_TIMEOUT: t.Number({ default: 30 }),
+
   // Redis connection string (caching, OTP storage).
   REDIS_URL: t.String({ default: "redis://localhost:6379" }),
 
