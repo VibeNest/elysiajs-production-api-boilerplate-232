@@ -6,6 +6,19 @@ import { sha256Hex } from "@/lib/hash";
 import { logger } from "@/lib/logger";
 
 /**
+ * A real argon2id hash to verify against when the email doesn't exist, so a
+ * failed login costs the same whether the account is missing or the password is
+ * wrong — closing the timing side-channel that leaks which emails are
+ * registered. Computed once, lazily.
+ */
+let dummyHash: string | null = null;
+async function getDummyHash(): Promise<string> {
+  if (!dummyHash)
+    dummyHash = await Bun.password.hash("invalid-credentials-placeholder");
+  return dummyHash;
+}
+
+/**
  * Request-independent auth logic: password hashing and all database access.
  * Token signing lives in the route handlers (it needs the request-scoped JWT
  * signers from the auth plugin).
@@ -64,7 +77,11 @@ export abstract class AuthService {
       .where(eq(users.email, email))
       .limit(1);
 
-    if (!user) throw new UnauthorizedError("Invalid credentials");
+    if (!user) {
+      // Spend the same argon2 work as a real verify, then fail identically.
+      await Bun.password.verify(password, await getDummyHash());
+      throw new UnauthorizedError("Invalid credentials");
+    }
 
     const valid = await Bun.password.verify(password, user.passwordHash);
     if (!valid) throw new UnauthorizedError("Invalid credentials");
