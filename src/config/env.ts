@@ -51,6 +51,10 @@ const EnvSchema = t.Object({
   QUEUE_DRIVER: t.Union([t.Literal("redis"), t.Literal("sync")], {
     default: "redis",
   }),
+
+  // Admin user created by `bun run db:seed` (set a real password before running).
+  SEED_ADMIN_EMAIL: t.String({ default: "admin@example.com" }),
+  SEED_ADMIN_PASSWORD: t.String({ default: "" }),
 });
 
 export type Env = typeof EnvSchema.static;

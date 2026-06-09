@@ -71,14 +71,17 @@ queue uses an inline "sync" driver, so no worker/Redis is needed.
 | `bun run db:generate` | Generate a migration from the schema |
 | `bun run db:migrate` | Apply migrations |
 | `bun run db:push` | Push schema directly (dev convenience) |
+| `bun run db:seed` | Create/promote the admin user (`SEED_ADMIN_*`) — idempotent |
 | `bun run db:studio` | Open Drizzle Studio |
 | `bun run lint` / `lint:fix` | Lint with Biome |
 | `bun run format` | Format with Biome |
 
 ## API overview
 
-- `GET /health` — liveness check
+- `GET /health` — liveness (shallow) · `GET /ready` — readiness (deep: Postgres + Redis)
+- `GET /metrics` — Prometheus metrics (keep internal / behind ingress)
 - `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` — public
+- `POST /auth/password/request-reset` · `POST /auth/password/reset` — public (forgotten password)
 - `GET /auth/me` · `POST /auth/logout` — authenticated
 - `POST /auth/email/request-otp` · `POST /auth/email/verify` — authenticated (email verification via OTP)
 - `GET /users` · `GET /users/:id` · `PATCH`/`DELETE /users/:id` — permission-gated (self or admin; role changes admin-only)
@@ -97,6 +100,19 @@ JWT_SECRET=... JWT_REFRESH_SECRET=... docker compose -f docker-compose.prod.yml 
 
 The production image is a distroless container running a compiled binary.
 Run migrations against the database separately (see `docker-compose.prod.yml`).
+
+## Start a new project from this template
+
+1. Copy the repo (or use it as a GitHub template) and `bun install`.
+2. Rename the project: `name` in [package.json](package.json), and the API
+   `title` / `description` in [src/plugins/openapi.ts](src/plugins/openapi.ts).
+3. `cp .env.example .env` and set real values — at minimum `JWT_SECRET` and
+   `JWT_REFRESH_SECRET` (`openssl rand -hex 32`), `DATABASE_URL`, and a restricted
+   `CORS_ORIGIN` for production. Set `SEED_ADMIN_*` if you'll seed an admin.
+4. `docker compose up -d` → `bun run db:migrate` → `bun run db:seed` (optional
+   first admin) → `bun run dev`.
+5. Add your own tables under `src/db/schema/` + `src/db/model/` and features
+   under `src/modules/` following the recipe below.
 
 ## Adding a new module
 
