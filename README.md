@@ -1,9 +1,11 @@
 # ElysiaJS Production API Boilerplate
 
 A reusable, production-ready API starter built on **ElysiaJS + Bun**: Drizzle ORM
-(PostgreSQL), JWT auth with a permission model + email verification (OTP), Redis
-caching, a BullMQ background-job queue, SMTP email, structured logging, rate
-limiting, XSS sanitization, centralized errors, OpenAPI docs, tests, Docker and CI.
+(PostgreSQL), JWT auth with a permission model + email verification (OTP) +
+password reset + refresh-token reuse detection, Redis caching, a BullMQ
+background-job queue, SMTP email, structured logging, Prometheus metrics, an audit
+log, rate limiting, security headers, XSS sanitization, centralized errors,
+OpenAPI docs, tests, Docker and CI.
 
 ## Stack
 
@@ -15,9 +17,11 @@ limiting, XSS sanitization, centralized errors, OpenAPI docs, tests, Docker and 
 - **Email:** SMTP via nodemailer (Mailtrap-ready); logs to console in dev without creds
 - **Logging:** Pino — pretty in dev, JSON in prod (stdout → any log aggregator); `LOG_LEVEL` configurable
 - **Rate limiting:** elysia-rate-limit (Redis-backed) — per-IP and per-user, opt-in per group
-- **Auth:** Custom JWT (access + rotating refresh) + Bearer, `Bun.password` (argon2id) hashing, permission model + email verification (OTP)
+- **Auth:** Custom JWT (access + rotating refresh, hashed + family-tracked with reuse detection) + Bearer, `Bun.password` (argon2id) hashing, permission model, email verification (OTP), password reset
+- **Observability:** Prometheus `/metrics`, deep `/ready` probe, append-only audit log for sensitive actions
+- **Hardening:** security headers, request body-size limit, configurable Postgres pool
 - **Docs:** OpenAPI at `/openapi`
-- **Quality:** Biome (lint + format), `bun test`
+- **Quality:** Biome (lint + format), `bun test` (CI enforces an 80% coverage floor)
 
 ## Quick start
 
@@ -44,15 +48,15 @@ bun run worker               # processes email jobs from the queue
 
 ```
 src/
-├── index.ts          # entry point: listen + graceful shutdown
+├── index.ts          # entry point: listen (body/idle limits) + graceful shutdown
 ├── app.ts            # composed app (no listen) — imported by tests
 ├── config/env.ts     # TypeBox-validated environment (fails fast at boot)
-├── db/               # Drizzle: schema/ + model/ (per-table), client, utils
-├── plugins/          # cors, openapi, error, logger, auth, rate-limit (each named for dedupe)
+├── db/               # Drizzle: schema/ + model/ (per-table), client, utils, seed.ts
+├── plugins/          # security-headers, cors, openapi, error, logger, metrics, health, auth, rate-limit (each named)
 ├── modules/          # feature modules (auth, user) — each = controller/service/model
-├── queue/            # BullMQ email queue + worker runtime
+├── queue/            # BullMQ: email + maintenance (token-cleanup) queues, worker runtime
 ├── worker.ts         # background worker entrypoint
-└── lib/              # shared helpers (errors, time, permissions, cache, mailer, logger, sanitize, ip)
+└── lib/              # shared helpers (errors, time, permissions, cache, mailer, logger, sanitize, ip, hash, audit)
 test/                 # bun:test integration tests via app.handle()
 ```
 

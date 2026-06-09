@@ -24,6 +24,7 @@ is needed — handy for seeing queued email in the API's own logs.
 bun run dev        # hot-reload dev server
 bun run worker     # background job worker (separate process; queue=redis)
 bun test           # tests (need a running Postgres + Redis — `docker compose up -d`)
+bun run db:seed    # create/promote the admin user (idempotent; needs SEED_ADMIN_*)
 bun run lint:fix   # Biome lint + format (run before committing)
 bun run build      # compile to ./server binary (build:worker for the worker)
 ```
@@ -104,6 +105,9 @@ process exits on missing/invalid values). To add a variable:
   `test/helpers.ts`) — don't start a real HTTP server.
 - Run a single file: `bun test test/auth.test.ts`. Filter by name: `bun test -t "logs in"`.
 - Use `uniqueEmail()` for data isolation so tests don't collide across runs.
+- **Coverage:** CI runs `bun test --coverage` and fails below the
+  `coverageThreshold` in `bunfig.toml` (currently 0.8). Keep new code covered;
+  raise the floor as coverage improves.
 
 ## Error responses
 
@@ -125,10 +129,12 @@ not-found-route (404) and parse (400) are handled automatically.
   **rotating refresh** token (`JWT_REFRESH_EXP`, default 7d) persisted in
   `refresh_tokens` (only the SHA-256 **hash** is stored — see `lib/hash.ts`).
 - `/auth/refresh` rotates the presented token: it's marked `used_at` (not
-  deleted) and a new token is issued in the **same `family_id`**. Reusing an
-  already-used token is treated as theft → the whole family is revoked (401) and
-  a `security.token_reuse_detected` audit event is written. Login/register start
-  a new family; logout revokes by family.
+  deleted) and a new token is issued in the **same `family_id`**. The claim is a
+  single conditional `UPDATE ... WHERE used_at IS NULL` so rotation is atomic —
+  two concurrent refreshes with the same token can't both succeed. Reusing an
+  already-used token (a replay, or the loser of a concurrent rotation) is treated
+  as theft → the whole family is revoked (401) and a `security.token_reuse_detected`
+  audit event is written. Login/register start a new family; logout revokes by family.
 - **Every refresh token must carry a unique `jti`** (`crypto.randomUUID()`) when
   signed. Without it, two tokens signed for the same user in the same second are
   byte-identical and violate the `token` unique constraint.
@@ -236,6 +242,11 @@ background jobs so requests return fast and failures retry.
   `export const xQueue = defineQueue<XJob>("x", (data) => handler(data))`, register
   it in `src/worker.ts` (`startWorker(xQueue)`), and close its producer in
   `index.ts` shutdown. Producers just `xQueue.add(...)`.
+- **Recurring jobs:** for cron-like work (e.g. the hourly `token-cleanup` sweep in
+  [queue/maintenance.queue.ts](src/queue/maintenance.queue.ts)) call
+  `scheduleRepeatable(queue, data, { every })` ([queue/runtime.ts](src/queue/runtime.ts))
+  from `src/worker.ts` after `startWorker`. It's idempotent (BullMQ dedupes the
+  schedule) and a no-op under the `sync` driver.
 
 ## Permissions
 
