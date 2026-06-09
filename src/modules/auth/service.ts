@@ -1,8 +1,9 @@
-import { and, eq, gt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { refreshTokens, users } from "@/db/schema";
 import { ConflictError, UnauthorizedError } from "@/lib/errors";
 import { sha256Hex } from "@/lib/hash";
+import { logger } from "@/lib/logger";
 
 /**
  * Request-independent auth logic: password hashing and all database access.
@@ -75,36 +76,67 @@ export abstract class AuthService {
     userId: string,
     token: string,
     expiresAt: Date,
+    familyId: string,
   ) {
     // Store only the hash — a DB leak then can't hand out usable tokens.
     await db
       .insert(refreshTokens)
-      .values({ userId, token: sha256Hex(token), expiresAt });
+      .values({ userId, token: sha256Hex(token), expiresAt, familyId });
   }
 
-  /** Validate a refresh token exists & isn't expired, then delete it (rotation). */
-  static async consumeRefreshToken(token: string) {
+  /**
+   * Consume a refresh token for rotation, with theft detection.
+   *
+   * The token row is kept and marked `usedAt` instead of deleted. A second
+   * presentation of an already-used token means it was stolen and replayed
+   * after the legitimate client rotated it — so the entire token family is
+   * revoked, logging out both parties. Returns the row (with its `familyId`)
+   * for the caller to mint the next token in the same family.
+   */
+  static async useRefreshToken(token: string) {
     const [row] = await db
       .select()
       .from(refreshTokens)
-      .where(
-        and(
-          eq(refreshTokens.token, sha256Hex(token)),
-          gt(refreshTokens.expiresAt, new Date()),
-        ),
-      )
+      .where(eq(refreshTokens.token, sha256Hex(token)))
       .limit(1);
 
-    if (!row) throw new UnauthorizedError("Invalid or expired refresh token");
+    if (!row) throw new UnauthorizedError("Invalid refresh token");
 
-    await db.delete(refreshTokens).where(eq(refreshTokens.id, row.id));
+    if (row.usedAt) {
+      // Reuse of a rotated token → theft. Burn the whole family.
+      await db
+        .delete(refreshTokens)
+        .where(eq(refreshTokens.familyId, row.familyId));
+      logger.warn(
+        { userId: row.userId, familyId: row.familyId },
+        "refresh token reuse detected — token family revoked",
+      );
+      throw new UnauthorizedError("Refresh token reuse detected");
+    }
+
+    if (row.expiresAt <= new Date()) {
+      await db.delete(refreshTokens).where(eq(refreshTokens.id, row.id));
+      throw new UnauthorizedError("Invalid or expired refresh token");
+    }
+
+    await db
+      .update(refreshTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(refreshTokens.id, row.id));
     return row;
   }
 
+  /** Revoke a session by deleting the presented token's entire family. */
   static async revokeRefreshToken(token: string) {
+    const [row] = await db
+      .select({ familyId: refreshTokens.familyId })
+      .from(refreshTokens)
+      .where(eq(refreshTokens.token, sha256Hex(token)))
+      .limit(1);
+    if (!row) return;
     await db
       .delete(refreshTokens)
-      .where(eq(refreshTokens.token, sha256Hex(token)));
+      .where(eq(refreshTokens.familyId, row.familyId));
   }
 
   static async markEmailVerified(userId: string) {

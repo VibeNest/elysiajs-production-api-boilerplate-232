@@ -52,10 +52,12 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
         sub: user.id,
         jti: crypto.randomUUID(),
       });
+      // New login → new token family.
       await AuthService.storeRefreshToken(
         user.id,
         refreshToken,
         new Date(Date.now() + REFRESH_MS),
+        crypto.randomUUID(),
       );
 
       return { accessToken, refreshToken, user: toPublicUser(user) };
@@ -83,10 +85,12 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
         sub: user.id,
         jti: crypto.randomUUID(),
       });
+      // New login → new token family.
       await AuthService.storeRefreshToken(
         user.id,
         refreshToken,
         new Date(Date.now() + REFRESH_MS),
+        crypto.randomUUID(),
       );
 
       return { accessToken, refreshToken, user: toPublicUser(user) };
@@ -103,8 +107,9 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       const payload = await refreshJwt.verify(body.refreshToken);
       if (!payload) throw new UnauthorizedError("Invalid refresh token");
 
-      // Rotation: invalidate the presented token (also checks DB + expiry).
-      await AuthService.consumeRefreshToken(body.refreshToken);
+      // Rotation with theft detection: marks the token used (or revokes the
+      // whole family on reuse) and returns its family id to continue the chain.
+      const used = await AuthService.useRefreshToken(body.refreshToken);
 
       const user = await AuthService.findById(payload.sub as string);
       if (!user) throw new UnauthorizedError();
@@ -118,10 +123,12 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
         sub: user.id,
         jti: crypto.randomUUID(),
       });
+      // Same family — this token descends from the original login.
       await AuthService.storeRefreshToken(
         user.id,
         refreshToken,
         new Date(Date.now() + REFRESH_MS),
+        used.familyId,
       );
 
       return { accessToken, refreshToken, user: toPublicUser(user) };
