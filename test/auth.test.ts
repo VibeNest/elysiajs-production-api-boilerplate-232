@@ -7,6 +7,13 @@ describe("health", () => {
     expect(res.status).toBe(200);
     expect((await body(res)).status).toBe("ok");
   });
+
+  it("handles an unmatched route (404) without the logger crashing", async () => {
+    // Regression: onAfterResponse fires for 404s where `derive` never ran, so
+    // the request-scoped `log` is undefined — it must not throw.
+    const res = await api("/favicon.ico");
+    expect(res.status).toBe(404);
+  });
 });
 
 describe("auth (requires a running database)", () => {

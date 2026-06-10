@@ -70,10 +70,14 @@ export const metricsPlugin = new Elysia({ name: "metrics" })
       status: String(set.status ?? 200),
     };
     httpRequestsTotal.inc(labels);
-    httpRequestDuration.observe(
-      labels,
-      (performance.now() - metricStart) / 1000,
-    );
+    // `derive` doesn't run for unmatched routes (404s), so metricStart can be
+    // undefined — count the request but only record duration when we timed it
+    // (observing NaN would permanently poison the histogram's sum).
+    if (metricStart !== undefined)
+      httpRequestDuration.observe(
+        labels,
+        (performance.now() - metricStart) / 1000,
+      );
   })
   .get(
     "/metrics",
