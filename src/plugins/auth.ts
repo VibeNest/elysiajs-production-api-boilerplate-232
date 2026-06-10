@@ -7,10 +7,9 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { type Operation, type Role, resolveScope } from "@/lib/permissions";
 
-/** Claims carried by an access token. */
+/** Claims carried by an access token — only what authorization needs. */
 export type AccessPayload = {
   sub: string;
-  email: string;
   role: Role;
 };
 

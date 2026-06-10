@@ -21,14 +21,10 @@ const REFRESH_MS = durationToMs(env.JWT_REFRESH_EXP) || durationToMs("7d");
  */
 async function issueTokens(
   jwt: { sign: (payload: AccessPayload) => Promise<string> },
-  user: { id: string; email: string; role: "user" | "admin" },
+  user: { id: string; role: "user" | "admin" },
   familyId: string,
 ) {
-  const accessToken = await jwt.sign({
-    sub: user.id,
-    email: user.email,
-    role: user.role,
-  });
+  const accessToken = await jwt.sign({ sub: user.id, role: user.role });
   const refreshToken = randomToken();
   await AuthService.storeRefreshToken(
     user.id,

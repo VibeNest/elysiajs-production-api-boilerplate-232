@@ -125,7 +125,8 @@ not-found-route (404) and parse (400) are handled automatically.
 
 ## Auth
 
-- Two tokens: a short-lived **access JWT** (`JWT_ACCESS_EXP`, default 15m) and
+- Two tokens: a short-lived **access JWT** (claims: `sub` + `role` only —
+  no PII; `JWT_ACCESS_EXP`, default 15m) and
   a **rotating refresh** token (`JWT_REFRESH_EXP`, default 7d) persisted in
   `refresh_tokens` (only the SHA-256 **hash** is stored — see `lib/hash.ts`).
   The refresh token is **not a JWT** — it's an opaque 256-bit random string
