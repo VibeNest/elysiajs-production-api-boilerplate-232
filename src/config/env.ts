@@ -26,6 +26,11 @@ const EnvSchema = t.Object({
   JWT_SECRET: t.String({ minLength: 16 }),
   JWT_ACCESS_EXP: t.String({ default: "15m" }),
   JWT_REFRESH_EXP: t.String({ default: "7d" }),
+  // Refresh-token transport: "bearer" (JSON body) or "cookie" (httpOnly
+  // cookie scoped to /auth; pair with a restricted CORS_ORIGIN in production).
+  AUTH_TRANSPORT: t.Union([t.Literal("bearer"), t.Literal("cookie")], {
+    default: "bearer",
+  }),
 
   // Comma-separated list of allowed origins, or "*" for any.
   CORS_ORIGIN: t.String({ default: "*" }),

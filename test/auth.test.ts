@@ -1,5 +1,13 @@
-import { describe, expect, it } from "bun:test";
-import { api, body, json, uniqueEmail } from "./helpers";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import {
+  api,
+  body,
+  json,
+  setCookie,
+  setCookieValue,
+  setEnv,
+  uniqueEmail,
+} from "./helpers";
 
 describe("health", () => {
   it("returns ok", async () => {
@@ -101,5 +109,152 @@ describe("auth (requires a running database)", () => {
       json("/auth/refresh", "POST", { refreshToken: token }),
     ]);
     expect([a.status, b.status].sort()).toEqual([200, 401]);
+  });
+
+  it("sets no cookies in bearer mode", async () => {
+    const res = await json("/auth/register", "POST", {
+      email: uniqueEmail(),
+      password: "supersecret",
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+});
+
+describe("auth cookie transport (requires a running database)", () => {
+  const COOKIE = "refresh_token";
+  let restore: () => void;
+
+  beforeAll(() => {
+    restore = setEnv("AUTH_TRANSPORT", "cookie");
+  });
+  afterAll(() => restore());
+
+  /** Register a fresh user; returns the refresh cookie value + access token. */
+  const registerWithCookie = async () => {
+    const res = await json("/auth/register", "POST", {
+      email: uniqueEmail(),
+      password: "supersecret",
+    });
+    expect(res.status).toBe(200);
+    const cookie = setCookieValue(res, COOKIE);
+    expect(cookie).toBeString();
+    const accessToken: string = (await body(res)).accessToken;
+    return { cookie: cookie as string, accessToken };
+  };
+
+  /** POST /auth/refresh with the cookie attached and no request body. */
+  const refreshWithCookie = (
+    cookie: string,
+    headers?: Record<string, string>,
+  ) =>
+    api("/auth/refresh", {
+      method: "POST",
+      headers: { Cookie: `${COOKIE}=${cookie}`, ...headers },
+    });
+
+  it("sets an httpOnly refresh cookie and omits the token from the body", async () => {
+    const email = uniqueEmail();
+    const password = "supersecret";
+    await json("/auth/register", "POST", { email, password });
+    const login = await json("/auth/login", "POST", { email, password });
+    expect(login.status).toBe(200);
+
+    const cookie = setCookie(login, COOKIE);
+    expect(cookie).toBeDefined();
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("Path=/auth");
+    expect(cookie).toContain("SameSite=Strict");
+    expect(cookie).toContain("Max-Age=");
+
+    const payload = await body(login);
+    expect(payload.accessToken).toBeString();
+    expect(payload.refreshToken).toBeUndefined();
+  });
+
+  it("refreshes via the cookie with no request body", async () => {
+    const { cookie } = await registerWithCookie();
+
+    const refreshed = await refreshWithCookie(cookie);
+    expect(refreshed.status).toBe(200);
+
+    const next = setCookieValue(refreshed, COOKIE);
+    expect(next).toBeString();
+    expect(next).not.toBe(cookie);
+    expect((await body(refreshed)).refreshToken).toBeUndefined();
+  });
+
+  it("still accepts the token in the JSON body as a fallback", async () => {
+    const { cookie } = await registerWithCookie();
+    const refreshed = await json("/auth/refresh", "POST", {
+      refreshToken: cookie,
+    });
+    expect(refreshed.status).toBe(200);
+  });
+
+  it("rejects refresh with neither cookie nor body", async () => {
+    const res = await api("/auth/refresh", { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+
+  it("logout revokes the session and clears the cookie", async () => {
+    const { cookie, accessToken } = await registerWithCookie();
+
+    const out = await api("/auth/logout", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Cookie: `${COOKIE}=${cookie}`,
+      },
+    });
+    expect(out.status).toBe(200);
+
+    // Clearing Set-Cookie must repeat the path, or browsers keep the cookie.
+    const cleared = setCookie(out, COOKIE);
+    expect(cleared).toContain("Max-Age=0");
+    expect(cleared).toContain("Path=/auth");
+
+    const after = await refreshWithCookie(cookie);
+    expect(after.status).toBe(401);
+  });
+
+  it("burns the family when a rotated cookie token is replayed", async () => {
+    const { cookie: original } = await registerWithCookie();
+
+    const rotated = await refreshWithCookie(original);
+    expect(rotated.status).toBe(200);
+    const fresh = setCookieValue(rotated, COOKIE) as string;
+
+    const replay = await refreshWithCookie(original);
+    expect(replay.status).toBe(401);
+
+    const afterBurn = await refreshWithCookie(fresh);
+    expect(afterBurn.status).toBe(401);
+  });
+
+  it("enforces the Origin allowlist when CORS_ORIGIN is restricted", async () => {
+    const restoreCors = setEnv("CORS_ORIGIN", "https://app.example.com");
+    try {
+      const { cookie } = await registerWithCookie();
+
+      const evil = await refreshWithCookie(cookie, {
+        Origin: "https://evil.example",
+      });
+      expect(evil.status).toBe(403);
+      expect((await body(evil)).error).toBe("FORBIDDEN");
+
+      // The rejected attempt never touched the token — an allowed Origin works.
+      const ok = await refreshWithCookie(cookie, {
+        Origin: "https://app.example.com",
+      });
+      expect(ok.status).toBe(200);
+
+      // No Origin header (curl, server-to-server) is allowed through.
+      const next = setCookieValue(ok, COOKIE) as string;
+      const noOrigin = await refreshWithCookie(next);
+      expect(noOrigin.status).toBe(200);
+    } finally {
+      restoreCors();
+    }
   });
 });

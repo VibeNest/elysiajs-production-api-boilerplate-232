@@ -90,7 +90,10 @@ queue uses an inline "sync" driver, so no worker/Redis is needed.
 - `POST /auth/email/request-otp` · `POST /auth/email/verify` — authenticated (email verification via OTP)
 - `GET /users` · `GET /users/:id` · `PATCH`/`DELETE /users/:id` — permission-gated (self or admin; role changes admin-only)
 
-Authenticate by sending `Authorization: Bearer <accessToken>`.
+Authenticate by sending `Authorization: Bearer <accessToken>`. With
+`AUTH_TRANSPORT=cookie` the refresh token moves to an httpOnly cookie
+(`Path=/auth`, `SameSite=Strict`) instead of the JSON body — pair it with a
+restricted `CORS_ORIGIN` in production.
 
 ## Docker
 

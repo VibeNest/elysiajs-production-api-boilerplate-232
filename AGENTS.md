@@ -140,6 +140,18 @@ not-found-route (404) and parse (400) are handled automatically.
   audit event is written. Login/register start a new family; logout revokes by family.
 - Refresh tokens are minted with `randomToken()` (32 random bytes, base64url);
   the entropy alone guarantees the `token` column's unique constraint.
+- **Refresh-token transport** is set by `AUTH_TRANSPORT`: `bearer` (default —
+  the token travels in the JSON body) or `cookie` — login/register/refresh set
+  an httpOnly `refresh_token` cookie (`Path=/auth`, `SameSite=Strict`, `Secure`
+  in prod, `Max-Age` from `JWT_REFRESH_EXP`) and omit `refreshToken` from the
+  response body; `/auth/refresh` and `/auth/logout` read the cookie first and
+  fall back to the body, and validate the `Origin` header against `CORS_ORIGIN`
+  (403 on mismatch — see [lib/origin.ts](src/lib/origin.ts)). Access tokens and
+  the route guards stay bearer-based in both modes. In production, cookie mode
+  needs an explicit `CORS_ORIGIN` (the Origin check is disabled under `*`), and
+  cross-**site** frontends won't receive a `SameSite=Strict` cookie. Read
+  `env.AUTH_TRANSPORT` per request (inside handlers), never hoist it to a
+  module-level const — that's what lets tests exercise both modes.
 - **Forgotten password:** `POST /auth/password/request-reset` (enumeration-safe;
   always 200) emails a code; `POST /auth/password/reset` verifies it, rehashes
   the password and revokes all sessions. Logic in

@@ -20,8 +20,15 @@ export const authModel = {
     email: t.String({ format: "email" }),
     password: t.String({ minLength: 8, maxLength: 128 }),
   }),
-  refreshBody: t.Object({
-    refreshToken: t.String({ minLength: 1 }),
+  // Optional both ways: in cookie mode the token arrives in the cookie and
+  // requests may omit the body entirely; the handlers enforce presence.
+  refreshBody: t.Optional(
+    t.Object({
+      refreshToken: t.Optional(t.String({ minLength: 1 })),
+    }),
+  ),
+  refreshCookie: t.Cookie({
+    refresh_token: t.Optional(t.String()),
   }),
   verifyOtpBody: t.Object({
     code: t.String({ minLength: 6, maxLength: 6 }),
@@ -36,7 +43,8 @@ export const authModel = {
   }),
   tokenResponse: t.Object({
     accessToken: t.String(),
-    refreshToken: t.String(),
+    // Present in bearer mode; omitted in cookie mode (httpOnly cookie instead).
+    refreshToken: t.Optional(t.String()),
     user: publicUser,
   }),
   publicUser,

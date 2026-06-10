@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { app } from "@/app";
+import { env } from "@/config/env";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { mailer } from "@/lib/mailer";
@@ -14,15 +15,43 @@ export const json = (
   method: string,
   body: unknown,
   token?: string,
+  headers?: Record<string, string>,
 ) =>
   api(path, {
     method,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
     },
     body: JSON.stringify(body),
   });
+
+/**
+ * Temporarily override a validated env value (e.g. AUTH_TRANSPORT) for a test
+ * block; call the returned restore function in `afterAll`. This mutates shared
+ * process state — it would break under `test.concurrent`.
+ */
+export function setEnv<K extends keyof typeof env>(
+  key: K,
+  value: (typeof env)[K],
+) {
+  const prev = env[key];
+  env[key] = value;
+  return () => {
+    env[key] = prev;
+  };
+}
+
+/** The raw Set-Cookie header for `name` from a response, or undefined. */
+export const setCookie = (res: Response, name: string) =>
+  res.headers.getSetCookie().find((c) => c.startsWith(`${name}=`));
+
+/** The value of the Set-Cookie header for `name`, or undefined. */
+export const setCookieValue = (res: Response, name: string) =>
+  setCookie(res, name)
+    ?.split(";")[0]
+    ?.slice(name.length + 1);
 
 /** Read a Response body as JSON, typed loosely for assertions. */
 // biome-ignore lint/suspicious/noExplicitAny: test assertions read arbitrary JSON
