@@ -1,6 +1,10 @@
 {
   "name": "app",
   "version": "1.0.50",
+  "overrides": {
+    "@opentelemetry/sdk-node": "^0.217.0",
+    "protobufjs": "^8.6.3"
+  },
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "worker": "bun run src/worker.ts",

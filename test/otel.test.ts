@@ -20,8 +20,12 @@ describe("opentelemetry plugin", () => {
     const res = await app.handle(new Request("http://localhost/ping"));
     expect(res.status).toBe(200);
 
-    // Span end is async relative to the response — give it a beat.
-    await Bun.sleep(20);
+    // Span end is async relative to the response — poll instead of trusting
+    // a fixed delay (a cold first run can exceed any single guess).
+    const deadline = Date.now() + 2000;
+    while (exporter.getFinishedSpans().length === 0 && Date.now() < deadline) {
+      await Bun.sleep(20);
+    }
     const spans = exporter.getFinishedSpans();
     expect(spans.length).toBeGreaterThan(0);
 
