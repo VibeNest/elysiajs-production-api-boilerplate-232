@@ -52,6 +52,12 @@ const EnvSchema = t.Object({
   // Log level: trace | debug | info | warn | error | fatal | silent.
   LOG_LEVEL: t.String({ default: "info" }),
 
+  // Distributed tracing (OpenTelemetry). When enabled, request spans are
+  // exported over OTLP/HTTP to the endpoint below (collector/Jaeger/Tempo).
+  OTEL_ENABLED: t.Boolean({ default: false }),
+  OTEL_SERVICE_NAME: t.String({ default: "app" }),
+  OTEL_EXPORTER_OTLP_ENDPOINT: t.String({ default: "http://localhost:4318" }),
+
   // Trust X-Forwarded-For for client IP (enable behind a proxy/load balancer).
   TRUST_PROXY: t.Boolean({ default: false }),
 

@@ -1,6 +1,10 @@
 {
   "name": "app",
   "version": "1.0.50",
+  "overrides": {
+    "@opentelemetry/sdk-node": "^0.217.0",
+    "protobufjs": "^8.6.3"
+  },
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "worker": "bun run src/worker.ts",
@@ -22,6 +26,11 @@
     "@elysiajs/bearer": "^1.4.4",
     "@elysiajs/cors": "^1.4.2",
     "@elysiajs/openapi": "^1.4.15",
+    "@elysiajs/opentelemetry": "^1.4.11",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
+    "@opentelemetry/sdk-trace-base": "^2.8.0",
+    "@opentelemetry/sdk-trace-node": "^2.8.0",
     "bullmq": "^5.78.0",
     "drizzle-orm": "^0.45.2",
     "drizzle-typebox": "^0.3.3",

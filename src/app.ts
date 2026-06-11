@@ -7,6 +7,7 @@ import { healthPlugin } from "./plugins/health";
 import { loggerPlugin } from "./plugins/logger";
 import { metricsPlugin } from "./plugins/metrics";
 import { openapiPlugin } from "./plugins/openapi";
+import { otelPlugin } from "./plugins/otel";
 import { securityHeadersPlugin } from "./plugins/security-headers";
 
 /**
@@ -15,6 +16,8 @@ import { securityHeadersPlugin } from "./plugins/security-headers";
  * starts the server.
  */
 export const app = new Elysia()
+  // First so request spans wrap every other plugin (no-op unless OTEL_ENABLED).
+  .use(otelPlugin)
   .use(securityHeadersPlugin)
   .use(corsPlugin)
   .use(openapiPlugin)
