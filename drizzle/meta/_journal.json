@@ -43,6 +43,13 @@
       "when": 1781208393926,
       "tag": "0005_sparkling_blazing_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781208990031,
+      "tag": "0006_daily_power_man",
+      "breakpoints": true
     }
   ]
 }

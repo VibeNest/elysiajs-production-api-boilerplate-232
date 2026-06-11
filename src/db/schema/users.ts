@@ -19,6 +19,12 @@ export const users = pgTable(
     name: varchar("name", { length: 255 }),
     role: roleEnum("role").notNull().default("user"),
     emailVerifiedAt: timestamp("email_verified_at"),
+    // TOTP 2FA: base32 secret written at setup (pending), live once
+    // totpEnabledAt is set. Stored plaintext — verification needs the raw
+    // secret; encrypt at rest (KMS/pgcrypto) if your threat model includes
+    // DB dumps.
+    totpSecret: varchar("totp_secret", { length: 64 }),
+    totpEnabledAt: timestamp("totp_enabled_at"),
     // Soft delete: rows are marked, never removed (audit/forensics). Every
     // read-path query must filter on deleted_at IS NULL — see notDeleted in
     // the services.

@@ -14,6 +14,7 @@ import { authModel } from "./model";
 import { OtpService } from "./otp.service";
 import { PasswordResetService } from "./password-reset.service";
 import { AuthService } from "./service";
+import { TotpService } from "./totp.service";
 
 const REFRESH_MS = durationToMs(env.JWT_REFRESH_EXP) || durationToMs("7d");
 const REFRESH_MAX_AGE_S = Math.floor(REFRESH_MS / 1000);
@@ -145,6 +146,13 @@ const credentialRoutes = new Elysia({ name: "auth-credentials" })
         body.password,
       );
 
+      // 2FA-enabled accounts don't get tokens from the password alone —
+      // they get a short-lived challenge to echo back with a TOTP code.
+      if (user.totpEnabledAt) {
+        const mfaToken = await TotpService.createLoginChallenge(user.id);
+        return { mfaRequired: true as const, mfaToken };
+      }
+
       // New login → new token family.
       const tokens = await issueTokens(
         user,
@@ -157,8 +165,35 @@ const credentialRoutes = new Elysia({ name: "auth-credentials" })
     {
       body: "loginBody",
       cookie: "refreshCookie",
-      response: "tokenResponse",
+      response: "loginResponse",
       detail: { summary: "Log in with email and password", tags: ["Auth"] },
+    },
+  )
+  .post(
+    "/2fa/verify",
+    async ({ body, cookie: { refresh_token } }) => {
+      const user = await TotpService.consumeLoginChallenge(
+        body.mfaToken,
+        body.code,
+      );
+
+      // Challenge passed — this is the real login: new token family.
+      const tokens = await issueTokens(
+        user,
+        crypto.randomUUID(),
+        refresh_token,
+      );
+
+      return { ...tokens, user: toPublicUser(user) };
+    },
+    {
+      body: "twoFaVerifyBody",
+      cookie: "refreshCookie",
+      response: "tokenResponse",
+      detail: {
+        summary: "Complete an MFA login challenge with a TOTP code",
+        tags: ["Auth"],
+      },
     },
   )
   .post(
@@ -322,6 +357,47 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       body: "verifyOtpBody",
       detail: {
         summary: "Verify the email-verification OTP",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+  )
+  .post("/2fa/setup", async ({ user }) => await TotpService.setup(user.sub), {
+    isAuthed: true,
+    response: "twoFaSetupResponse",
+    detail: {
+      summary: "Begin TOTP 2FA enrollment (returns the otpauth:// URI)",
+      tags: ["Auth"],
+      security: [{ bearerAuth: [] }],
+    },
+  })
+  .post(
+    "/2fa/enable",
+    async ({ user, body }) => {
+      await TotpService.enable(user.sub, body.code);
+      return { enabled: true };
+    },
+    {
+      isAuthed: true,
+      body: "twoFaCodeBody",
+      detail: {
+        summary: "Enable 2FA by confirming a code from the authenticator",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+  )
+  .post(
+    "/2fa/disable",
+    async ({ user, body }) => {
+      await TotpService.disable(user.sub, body.code);
+      return { enabled: false };
+    },
+    {
+      isAuthed: true,
+      body: "twoFaCodeBody",
+      detail: {
+        summary: "Disable 2FA with a valid current code",
         tags: ["Auth"],
         security: [{ bearerAuth: [] }],
       },
