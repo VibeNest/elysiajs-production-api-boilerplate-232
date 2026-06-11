@@ -142,6 +142,12 @@ not-found-route (404) and parse (400) are handled automatically.
   audit event is written. Login/register start a new family; logout revokes by family.
 - Refresh tokens are minted with `randomToken()` (32 random bytes, base64url);
   the entropy alone guarantees the `token` column's unique constraint.
+- **Access-token signing/verification** lives in [lib/jwt.ts](src/lib/jwt.ts)
+  (jose, HS256) — secrets are read from env **per call**, never captured at
+  module load. That enables zero-downtime **secret rotation**: deploy the new
+  `JWT_SECRET` with the old one in `JWT_SECRET_PREVIOUS` (verification tries
+  current, then previous), and drop the previous secret once `JWT_ACCESS_EXP`
+  has passed.
 - **Refresh-token transport** is set by `AUTH_TRANSPORT`: `bearer` (default —
   the token travels in the JSON body) or `cookie` — login/register/refresh set
   an httpOnly `refresh_token` cookie (`Path=/auth`, `SameSite=Strict`, `Secure`
@@ -212,6 +218,17 @@ not-found-route (404) and parse (400) are handled automatically.
   readiness (Postgres `SELECT 1` + Redis `PING`, 503 if down). See
   [plugins/health.ts](src/plugins/health.ts) — point k8s liveness at `/health`,
   readiness at `/ready`.
+- **Boot fail-fast:** both entrypoints await `waitForDependencies()`
+  ([lib/readiness.ts](src/lib/readiness.ts)) before serving — the same
+  Postgres/Redis pings as `/ready`, retried 10× then a non-zero exit. Pings
+  carry a 2s deadline (`withDeadline`); this matters because Bun's RedisClient
+  queues commands while reconnecting, so a ping against a dead Redis would
+  otherwise hang forever instead of failing.
+- **Ops alerts:** `sendAlert({ title, message, context? })`
+  ([lib/alert.ts](src/lib/alert.ts)) POSTs JSON to `ALERT_WEBHOOK_URL`
+  (Slack/Discord/PagerDuty-style; empty = disabled). Best-effort: never
+  throws, failures are logged. Currently fired when a queue job exhausts its
+  retries.
 - **Metrics:** `/metrics` exposes Prometheus text (default process metrics, HTTP
   request counter + duration histogram labelled by **matched route**, queue depth
   gauge). Unauthenticated — keep it internal. See [plugins/metrics.ts](src/plugins/metrics.ts).
@@ -265,7 +282,10 @@ background jobs so requests return fast and failures retry.
 - Define a queue with `defineQueue<T>(name, processor, defaultJobOpts?)`
   ([queue/define.ts](src/queue/define.ts)). The same `processor` powers both the
   worker and the inline driver, so there's one place that handles a job. Jobs
-  default to 3 attempts with exponential backoff.
+  default to 3 attempts with exponential backoff. A failure with retries left
+  logs a warning; exhausting all attempts logs an error **and fires an ops
+  alert** (`handleJobFailure` in [queue/runtime.ts](src/queue/runtime.ts),
+  webhook via `ALERT_WEBHOOK_URL`).
 - **Driver** ([queue/connection.ts](src/queue/connection.ts)): `redis` (BullMQ) in
   dev/prod; `sync` (inline, no worker/Redis) forced in tests — so `.add()` runs the
   processor immediately and existing tests stay synchronous. Set via `QUEUE_DRIVER`.

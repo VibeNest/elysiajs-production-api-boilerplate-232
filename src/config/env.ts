@@ -24,6 +24,10 @@ const EnvSchema = t.Object({
   // Auth — access-token secret (keep it long and random in production).
   // Refresh tokens are opaque random strings, no signing secret needed.
   JWT_SECRET: t.String({ minLength: 16 }),
+  // Zero-downtime secret rotation: put the old secret here while deploying a
+  // new JWT_SECRET — in-flight access tokens stay valid for the rotation
+  // window. Drop it once JWT_ACCESS_EXP has passed. Empty = disabled.
+  JWT_SECRET_PREVIOUS: t.String({ default: "" }),
   JWT_ACCESS_EXP: t.String({ default: "15m" }),
   JWT_REFRESH_EXP: t.String({ default: "7d" }),
   // Refresh-token transport: "bearer" (JSON body) or "cookie" (httpOnly
@@ -70,6 +74,10 @@ const EnvSchema = t.Object({
   QUEUE_DRIVER: t.Union([t.Literal("redis"), t.Literal("sync")], {
     default: "redis",
   }),
+
+  // Ops alert webhook (Slack/Discord/PagerDuty-compatible JSON POST). Fired on
+  // critical events, e.g. a queue job exhausting its retries. Empty = disabled.
+  ALERT_WEBHOOK_URL: t.String({ default: "" }),
 
   // Admin user created by `bun run db:seed` (set a real password before running).
   SEED_ADMIN_EMAIL: t.String({ default: "admin@example.com" }),

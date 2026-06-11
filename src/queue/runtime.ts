@@ -1,7 +1,49 @@
 import { Worker } from "bullmq";
+import { sendAlert } from "@/lib/alert";
 import { logger } from "@/lib/logger";
 import { connection } from "./connection";
 import type { QueueDef } from "./define";
+
+/** The slice of a BullMQ job that failure handling needs (kept narrow for tests). */
+export interface FailedJobInfo {
+  id?: string;
+  attemptsMade: number;
+  opts?: { attempts?: number };
+}
+
+/**
+ * Handle a job failure: warn while retries remain, escalate to an error log +
+ * ops alert once the job has exhausted its attempts (it won't run again, so
+ * someone has to look). Exported separately from the worker wiring so the
+ * final-attempt logic is testable without a live BullMQ worker.
+ */
+export async function handleJobFailure(
+  queueName: string,
+  job: FailedJobInfo | undefined,
+  err: Error,
+): Promise<void> {
+  const maxAttempts = job?.opts?.attempts ?? 1;
+  const isFinal = (job?.attemptsMade ?? maxAttempts) >= maxAttempts;
+  const fields = {
+    queue: queueName,
+    jobId: job?.id,
+    attemptsMade: job?.attemptsMade,
+    maxAttempts,
+    err,
+  };
+
+  if (!isFinal) {
+    logger.warn(fields, "queue job failed — will retry");
+    return;
+  }
+
+  logger.error(fields, "queue job permanently failed");
+  await sendAlert({
+    title: "queue job permanently failed",
+    message: `${queueName} job ${job?.id ?? "?"} exhausted ${maxAttempts} attempts: ${err.message}`,
+    context: { queue: queueName, jobId: job?.id, error: err.message },
+  });
+}
 
 /**
  * Start a BullMQ worker for a queue. Only valid in "redis" driver mode — run
@@ -18,9 +60,7 @@ export function startWorker<T>(q: QueueDef<T>): Worker<T> {
     concurrency: 5,
   });
 
-  worker.on("failed", (job, err) =>
-    logger.error({ queue: q.name, jobId: job?.id, err }, "queue job failed"),
-  );
+  worker.on("failed", (job, err) => void handleJobFailure(q.name, job, err));
 
   return worker;
 }

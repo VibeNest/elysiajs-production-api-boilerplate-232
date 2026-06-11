@@ -4,9 +4,10 @@ import { recordAudit } from "@/lib/audit";
 import { BadRequestError, UnauthorizedError } from "@/lib/errors";
 import { randomToken } from "@/lib/hash";
 import { clientIp } from "@/lib/ip";
+import { signAccessToken } from "@/lib/jwt";
 import { assertTrustedOrigin } from "@/lib/origin";
 import { durationToMs } from "@/lib/time";
-import { type AccessPayload, authPlugin } from "@/plugins/auth";
+import { authPlugin } from "@/plugins/auth";
 import { loggerPlugin } from "@/plugins/logger";
 import { ipRateLimit } from "@/plugins/rate-limit";
 import { authModel } from "./model";
@@ -37,18 +38,17 @@ const requireTrustedOrigin = ({ request }: { request: Request }) => {
 };
 
 /**
- * Sign an access JWT and mint + persist an opaque refresh token. Lives in the
- * controller (not AuthService) because signing needs the request-scoped `jwt`
- * from the auth plugin. AUTH_TRANSPORT is read per request (never hoisted to a
- * module const) so tests can exercise both modes in one process.
+ * Sign an access JWT (lib/jwt.ts — secrets read per call, so rotation works)
+ * and mint + persist an opaque refresh token. AUTH_TRANSPORT is read per
+ * request (never hoisted to a module const) so tests can exercise both modes
+ * in one process.
  */
 async function issueTokens(
-  jwt: { sign: (payload: AccessPayload) => Promise<string> },
   user: { id: string; role: "user" | "admin" },
   familyId: string,
   refreshCookie: Cookie<string | undefined>,
 ): Promise<{ accessToken: string; refreshToken?: string }> {
-  const accessToken = await jwt.sign({ sub: user.id, role: user.role });
+  const accessToken = await signAccessToken({ sub: user.id, role: user.role });
   const refreshToken = randomToken();
   await AuthService.storeRefreshToken(
     user.id,
@@ -95,7 +95,7 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   .model(authModel)
   .post(
     "/register",
-    async ({ body, jwt, request, server, cookie: { refresh_token }, log }) => {
+    async ({ body, request, server, cookie: { refresh_token }, log }) => {
       const user = await AuthService.createUser(
         body.email,
         body.password,
@@ -124,7 +124,6 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
 
       // New login → new token family.
       const tokens = await issueTokens(
-        jwt,
         user,
         crypto.randomUUID(),
         refresh_token,
@@ -141,7 +140,7 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   )
   .post(
     "/login",
-    async ({ body, jwt, cookie: { refresh_token } }) => {
+    async ({ body, cookie: { refresh_token } }) => {
       const user = await AuthService.verifyCredentials(
         body.email,
         body.password,
@@ -149,7 +148,6 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
 
       // New login → new token family.
       const tokens = await issueTokens(
-        jwt,
         user,
         crypto.randomUUID(),
         refresh_token,
@@ -169,7 +167,7 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
     // Intentionally not gated by REQUIRE_VERIFIED_EMAIL: it authenticates via
     // the refresh token, and an unverified user must be able to stay logged in
     // long enough to complete verification.
-    async ({ body, jwt, cookie: { refresh_token } }) => {
+    async ({ body, cookie: { refresh_token } }) => {
       const presented =
         (env.AUTH_TRANSPORT === "cookie" ? refresh_token.value : undefined) ??
         body?.refreshToken;
@@ -183,7 +181,7 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       if (!user) throw new UnauthorizedError();
 
       // Same family — this token descends from the original login.
-      const tokens = await issueTokens(jwt, user, used.familyId, refresh_token);
+      const tokens = await issueTokens(user, used.familyId, refresh_token);
 
       return { ...tokens, user: toPublicUser(user) };
     },

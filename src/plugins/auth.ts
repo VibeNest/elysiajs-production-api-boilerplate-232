@@ -1,17 +1,13 @@
 import { bearer } from "@elysiajs/bearer";
-import { jwt } from "@elysiajs/jwt";
 import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { env } from "@/config/env";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { type AccessPayload, verifyAccessToken } from "@/lib/jwt";
 import { type Operation, type Role, resolveScope } from "@/lib/permissions";
 
-/** Claims carried by an access token — only what authorization needs. */
-export type AccessPayload = {
-  sub: string;
-  role: Role;
-};
+export type { AccessPayload };
 
 const UNAUTHORIZED = {
   error: "UNAUTHORIZED",
@@ -26,11 +22,9 @@ const EMAIL_NOT_VERIFIED = {
 /** Verify a bearer token and return the access payload, or null if invalid. */
 async function resolveUser(
   bearer: string | undefined,
-  verify: (token: string) => Promise<unknown>,
 ): Promise<AccessPayload | null> {
   if (!bearer) return null;
-  const payload = await verify(bearer);
-  return payload ? (payload as unknown as AccessPayload) : null;
+  return verifyAccessToken(bearer);
 }
 
 /** Fresh DB check — emailVerifiedAt is never carried in the JWT. */
@@ -53,10 +47,10 @@ async function passesVerificationGate(userId: string): Promise<boolean> {
 }
 
 /**
- * Auth plugin: the access-token JWT signer, the bearer extractor, and
- * reusable guard macros. (Refresh tokens are opaque random strings minted in
- * the auth module — no signer needed.) On success each macro adds a typed
- * `user: AccessPayload` to the context.
+ * Auth plugin: the bearer extractor and reusable guard macros. (Access tokens
+ * are signed/verified in lib/jwt.ts; refresh tokens are opaque random strings
+ * minted in the auth module — no signer needed here.) On success each macro
+ * adds a typed `user: AccessPayload` to the context.
  *
  *   { isAuthed: true }                                  // any authenticated user
  *   { isAuthed: "allowUnverified" }                     // exempt from REQUIRE_VERIFIED_EMAIL
@@ -81,81 +75,81 @@ async function passesVerificationGate(userId: string): Promise<boolean> {
  * "allowUnverified" exists for the verification bootstrap routes (/auth/me,
  * /auth/logout, /auth/email/*) — without it an unverified user could never
  * verify. Cost when the flag is on: one indexed PK select per authed request.
+ *
+ * Token signing/verification lives in lib/jwt.ts (jose) — secrets are read per
+ * request, which is what makes JWT_SECRET_PREVIOUS rotation work.
  */
-export const authPlugin = new Elysia({ name: "auth" })
-  .use(jwt({ name: "jwt", secret: env.JWT_SECRET, exp: env.JWT_ACCESS_EXP }))
-  .use(bearer())
-  .macro({
-    /**
-     * `true` requires a verified email when REQUIRE_VERIFIED_EMAIL is on;
-     * `"allowUnverified"` skips that gate (verification bootstrap routes).
-     */
-    isAuthed(mode: true | "allowUnverified") {
-      return {
-        async resolve({ bearer, jwt, status }) {
-          const user = await resolveUser(bearer, (t) => jwt.verify(t));
-          if (!user) return status(401, UNAUTHORIZED);
-          if (
-            mode !== "allowUnverified" &&
-            !(await passesVerificationGate(user.sub))
-          )
-            return status(403, EMAIL_NOT_VERIFIED);
-          return { user };
-        },
-      };
-    },
-    hasRole(role: Role) {
-      return {
-        async resolve({ bearer, jwt, status }) {
-          const user = await resolveUser(bearer, (t) => jwt.verify(t));
-          if (!user) return status(401, UNAUTHORIZED);
-          if (!(await passesVerificationGate(user.sub)))
-            return status(403, EMAIL_NOT_VERIFIED);
-          if (user.role !== role) return status(403, FORBIDDEN);
-          return { user };
-        },
-      };
-    },
-    /**
-     * Permission gate. `action` is "<model>:<operation>"; the granted scope is
-     * resolved from the user's role. With `ownParam`, an "own"-scope user must
-     * own the resource (route param === user id) — admins ("all") bypass this.
-     */
-    can(opts: { action: string; ownParam?: string }) {
-      const [model, operation] = opts.action.split(":") as [string, Operation];
-      return {
-        async resolve({ bearer, jwt, params, status }) {
-          const user = await resolveUser(bearer, (t) => jwt.verify(t));
-          if (!user) return status(401, UNAUTHORIZED);
-          if (!(await passesVerificationGate(user.sub)))
-            return status(403, EMAIL_NOT_VERIFIED);
-
-          const scope = resolveScope(user.role, model, operation);
-          if (!scope) return status(403, FORBIDDEN);
-
-          if (scope === "own" && opts.ownParam) {
-            const targetId = (params as Record<string, string | undefined>)[
-              opts.ownParam
-            ];
-            if (user.sub !== targetId) return status(403, FORBIDDEN);
-          }
-
-          return { user, scope };
-        },
-      };
-    },
-    /**
-     * Always require a verified email, independent of REQUIRE_VERIFIED_EMAIL —
-     * per-route opt-in for flag-off deployments. Authenticates, then checks
-     * `emailVerifiedAt` in the DB (always fresh).
-     */
-    verifiedEmail: {
-      async resolve({ bearer, jwt, status }) {
-        const user = await resolveUser(bearer, (t) => jwt.verify(t));
+export const authPlugin = new Elysia({ name: "auth" }).use(bearer()).macro({
+  /**
+   * `true` requires a verified email when REQUIRE_VERIFIED_EMAIL is on;
+   * `"allowUnverified"` skips that gate (verification bootstrap routes).
+   */
+  isAuthed(mode: true | "allowUnverified") {
+    return {
+      async resolve({ bearer, status }) {
+        const user = await resolveUser(bearer);
         if (!user) return status(401, UNAUTHORIZED);
-        if (!(await isEmailVerified(user.sub)))
+        if (
+          mode !== "allowUnverified" &&
+          !(await passesVerificationGate(user.sub))
+        )
           return status(403, EMAIL_NOT_VERIFIED);
         return { user };
       },
+    };
+  },
+  hasRole(role: Role) {
+    return {
+      async resolve({ bearer, status }) {
+        const user = await resolveUser(bearer);
+        if (!user) return status(401, UNAUTHORIZED);
+        if (!(await passesVerificationGate(user.sub)))
+          return status(403, EMAIL_NOT_VERIFIED);
+        if (user.role !== role) return status(403, FORBIDDEN);
+        return { user };
+      },
+    };
+  },
+  /**
+   * Permission gate. `action` is "<model>:<operation>"; the granted scope is
+   * resolved from the user's role. With `ownParam`, an "own"-scope user must
+   * own the resource (route param === user id) — admins ("all") bypass this.
+   */
+  can(opts: { action: string; ownParam?: string }) {
+    const [model, operation] = opts.action.split(":") as [string, Operation];
+    return {
+      async resolve({ bearer, params, status }) {
+        const user = await resolveUser(bearer);
+        if (!user) return status(401, UNAUTHORIZED);
+        if (!(await passesVerificationGate(user.sub)))
+          return status(403, EMAIL_NOT_VERIFIED);
+
+        const scope = resolveScope(user.role, model, operation);
+        if (!scope) return status(403, FORBIDDEN);
+
+        if (scope === "own" && opts.ownParam) {
+          const targetId = (params as Record<string, string | undefined>)[
+            opts.ownParam
+          ];
+          if (user.sub !== targetId) return status(403, FORBIDDEN);
+        }
+
+        return { user, scope };
+      },
+    };
+  },
+  /**
+   * Always require a verified email, independent of REQUIRE_VERIFIED_EMAIL —
+   * per-route opt-in for flag-off deployments. Authenticates, then checks
+   * `emailVerifiedAt` in the DB (always fresh).
+   */
+  verifiedEmail: {
+    async resolve({ bearer, status }) {
+      const user = await resolveUser(bearer);
+      if (!user) return status(401, UNAUTHORIZED);
+      if (!(await isEmailVerified(user.sub)))
+        return status(403, EMAIL_NOT_VERIFIED);
+      return { user };
     },
-  });
+  },
+});

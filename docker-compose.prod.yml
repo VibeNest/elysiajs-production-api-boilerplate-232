@@ -13,7 +13,9 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/app
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,6 +31,9 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/app
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      # The worker is where queue jobs run — and where their final-failure
+      # alerts fire from.
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

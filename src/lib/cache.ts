@@ -1,11 +1,17 @@
 import { RedisClient } from "bun";
 import { env } from "@/config/env";
+import { logger } from "@/lib/logger";
 
 /**
  * Shared Redis client (Bun's built-in RedisClient — no extra dependency).
- * Connects lazily on first command. Closed on graceful shutdown (see index.ts).
+ * Connects lazily on first command and auto-reconnects; startup additionally
+ * fail-fasts via lib/readiness.ts. Closed on graceful shutdown (see index.ts).
  */
 export const redis = new RedisClient(env.REDIS_URL);
+
+// Surface connection drops in the logs — without this a dead Redis is only
+// visible as failed commands. Fires on graceful shutdown too (one warn line).
+redis.onclose = (err) => logger.warn({ err }, "redis connection closed");
 
 /**
  * Thin, reusable cache helpers. Not OTP-specific — use for any caching need.

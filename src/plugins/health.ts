@@ -1,7 +1,5 @@
 import { Elysia } from "elysia";
-import { queryClient } from "@/db";
-import { redis } from "@/lib/cache";
-import { logger } from "@/lib/logger";
+import { pingPostgres, pingRedis } from "@/lib/readiness";
 
 /**
  * Liveness vs readiness.
@@ -11,7 +9,7 @@ import { logger } from "@/lib/logger";
  * - `GET /ready` — **deep** readiness. Verifies the process can actually serve
  *   traffic by pinging Postgres (`SELECT 1`) and Redis (`PING`). Returns 503 if
  *   any dependency is down so a load balancer / k8s readiness probe stops
- *   routing to this instance.
+ *   routing to this instance. The same pings gate startup (lib/readiness.ts).
  */
 export const healthPlugin = new Elysia({ name: "health" })
   .get("/health", () => ({ status: "ok", uptime: process.uptime() }), {
@@ -20,22 +18,7 @@ export const healthPlugin = new Elysia({ name: "health" })
   .get(
     "/ready",
     async ({ set }) => {
-      const [db, redisOk] = await Promise.all([
-        queryClient`SELECT 1`.then(
-          () => true,
-          (err) => {
-            logger.error({ err }, "readiness: postgres check failed");
-            return false;
-          },
-        ),
-        redis.send("PING", []).then(
-          () => true,
-          (err) => {
-            logger.error({ err }, "readiness: redis check failed");
-            return false;
-          },
-        ),
-      ]);
+      const [db, redisOk] = await Promise.all([pingPostgres(), pingRedis()]);
 
       const ready = db && redisOk;
       if (!ready) set.status = 503;

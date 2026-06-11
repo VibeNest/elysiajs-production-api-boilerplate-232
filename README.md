@@ -17,9 +17,9 @@ OpenAPI docs, tests, Docker and CI.
 - **Email:** SMTP via nodemailer (Mailtrap-ready); logs to console in dev without creds
 - **Logging:** Pino — pretty in dev, JSON in prod (stdout → any log aggregator); `LOG_LEVEL` configurable
 - **Rate limiting:** elysia-rate-limit (Redis-backed) — per-IP and per-user, opt-in per group
-- **Auth:** Access JWT + opaque rotating refresh tokens (hashed + family-tracked with reuse detection) + Bearer, `Bun.password` (argon2id) hashing, permission model, email verification (OTP), password reset
-- **Observability:** Prometheus `/metrics`, deep `/ready` probe, append-only audit log for sensitive actions
-- **Hardening:** security headers, request body-size limit, configurable Postgres pool
+- **Auth:** Access JWT (zero-downtime secret rotation via `JWT_SECRET_PREVIOUS`) + opaque rotating refresh tokens (hashed + family-tracked with reuse detection) + Bearer, `Bun.password` (argon2id) hashing, permission model, email verification (OTP), password reset
+- **Observability:** Prometheus `/metrics`, deep `/ready` probe, append-only audit log for sensitive actions, ops alert webhook for permanently failed jobs
+- **Hardening:** boot-time dependency fail-fast, security headers, request body-size limit, configurable Postgres pool
 - **Docs:** OpenAPI at `/openapi`
 - **Quality:** Biome (lint + format), `bun test` (CI enforces an 80% coverage floor)
 

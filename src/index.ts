@@ -3,7 +3,18 @@ import { env } from "./config/env";
 import { queryClient } from "./db";
 import { redis } from "./lib/cache";
 import { logger } from "./lib/logger";
+import { waitForDependencies } from "./lib/readiness";
 import { emailQueue } from "./queue/email.queue";
+
+// Fail fast: both clients connect lazily, so without this a dead Postgres or
+// Redis would only surface on the first real request. Retries cover the
+// container-orchestration window where dependencies are still coming up.
+try {
+  await waitForDependencies();
+} catch (err) {
+  logger.fatal({ err }, "dependencies unavailable — exiting");
+  process.exit(1);
+}
 
 app.listen(
   {

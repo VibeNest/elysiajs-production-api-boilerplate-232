@@ -10,6 +10,8 @@ import { mailer } from "@/lib/mailer";
 // Variant-specific describes opt in explicitly via setEnv below.
 env.AUTH_TRANSPORT = "bearer";
 env.REQUIRE_VERIFIED_EMAIL = false;
+env.ALERT_WEBHOOK_URL = "";
+env.JWT_SECRET_PREVIOUS = "";
 
 /** Fire a request at the app in-process (no network) and get the Response. */
 export const api = (path: string, init?: RequestInit) =>
