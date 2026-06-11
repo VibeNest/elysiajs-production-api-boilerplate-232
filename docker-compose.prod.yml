@@ -16,6 +16,11 @@ services:
       JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      # Tracing — when enabling, point the endpoint at YOUR collector
+      # (inside a container "localhost:4318" is the container itself).
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}
     depends_on:
       postgres:
         condition: service_healthy

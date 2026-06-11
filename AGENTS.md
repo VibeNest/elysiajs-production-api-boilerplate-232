@@ -239,6 +239,11 @@ not-found-route (404) and parse (400) are handled automatically.
   spans wrap everything; when disabled it's an inert named plugin. The request
   logger binds the active `traceId` next to `requestId`, linking logs to
   traces. API process only — the worker isn't traced.
+  **Local dev:** `docker compose --profile tracing up -d` adds a Jaeger
+  all-in-one on the default endpoint — set `OTEL_ENABLED=true` in `.env` and
+  open http://localhost:16686. In `docker-compose.prod.yml`, point
+  `OTEL_EXPORTER_OTLP_ENDPOINT` at your collector (a container's `localhost`
+  is itself).
 - **Security headers:** [plugins/security-headers.ts](src/plugins/security-headers.ts)
   sets nosniff / frame-deny / referrer-policy / CORP on every response (HSTS in
   prod) via a global `onRequest`.

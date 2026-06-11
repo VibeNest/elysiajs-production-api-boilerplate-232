@@ -30,5 +30,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # Trace backend for local development — opt-in via the "tracing" profile:
+  #   docker compose --profile tracing up -d
+  # then set OTEL_ENABLED=true in .env and open http://localhost:16686.
+  # The API's default OTEL_EXPORTER_OTLP_ENDPOINT already points here.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    profiles: ["tracing"]
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "4318:4318" # OTLP/HTTP ingest
+      - "16686:16686" # Jaeger UI
+
 volumes:
   pgdata:
