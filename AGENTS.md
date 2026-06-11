@@ -281,6 +281,12 @@ forever) are purged daily by the `audit-retention` maintenance queue
 - **Don't call `mailer.send` from request handlers** — enqueue instead:
   `emailQueue.add({ to, subject, text })`. Only the worker (or the sync driver)
   delivers.
+- **Templates:** transactional mail is built in
+  [lib/mail-templates.ts](src/lib/mail-templates.ts) — a shared branded HTML
+  wrapper (`renderEmailHtml`, inline styles, everything escaped, `APP_NAME` in
+  the header) plus one builder per mail returning a `Mail` with both `text`
+  and `html`. Keep `text` the source of truth (tests read codes from it); add
+  new mails as builders here, not inline in services.
 
 ## Queues (BullMQ)
 

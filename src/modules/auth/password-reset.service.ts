@@ -2,7 +2,7 @@ import { recordAudit } from "@/lib/audit";
 import { cache } from "@/lib/cache";
 import { BadRequestError } from "@/lib/errors";
 import { sha256Hex } from "@/lib/hash";
-import type { Mail } from "@/lib/mailer";
+import { passwordResetCodeEmail } from "@/lib/mail-templates";
 import { emailQueue } from "@/queue/email.queue";
 import { AuthService } from "./service";
 
@@ -18,14 +18,6 @@ const cooldownKey = (userId: string) => `pwreset:cooldown:${userId}`;
 function generateCode(): string {
   const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
   return n.toString().padStart(6, "0");
-}
-
-function resetEmail(to: string, code: string): Mail {
-  return {
-    to,
-    subject: "Your password reset code",
-    text: `Your password reset code is ${code}. It expires in 15 minutes. If you didn't request this, ignore this email.`,
-  };
 }
 
 /**
@@ -49,7 +41,7 @@ export abstract class PasswordResetService {
     await cache.set(attemptsKey(user.id), "0", TTL_SECONDS);
     await cache.set(cooldownKey(user.id), "1", COOLDOWN_SECONDS);
 
-    await emailQueue.add(resetEmail(email, code));
+    await emailQueue.add(passwordResetCodeEmail(email, code));
   }
 
   /** Verify the code and set the new password. Throws on any failure. */

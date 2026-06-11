@@ -1,6 +1,6 @@
 import { cache } from "@/lib/cache";
 import { BadRequestError } from "@/lib/errors";
-import type { Mail } from "@/lib/mailer";
+import { verificationCodeEmail } from "@/lib/mail-templates";
 import { emailQueue } from "@/queue/email.queue";
 
 const OTP_TTL_SECONDS = 10 * 60; // code lifetime
@@ -22,14 +22,6 @@ function hashCode(code: string): string {
   return new Bun.CryptoHasher("sha256").update(code).digest("hex");
 }
 
-function otpEmail(to: string, code: string): Mail {
-  return {
-    to,
-    subject: "Your verification code",
-    text: `Your email verification code is ${code}. It expires in 10 minutes.`,
-  };
-}
-
 /**
  * Email-verification OTP, backed by Redis (see lib/cache.ts).
  * Request-independent — all state lives in Redis with TTLs.
@@ -47,7 +39,7 @@ export abstract class OtpService {
     await cache.set(attemptsKey(userId), "0", OTP_TTL_SECONDS);
     await cache.set(cooldownKey(userId), "1", COOLDOWN_SECONDS);
 
-    await emailQueue.add(otpEmail(email, code));
+    await emailQueue.add(verificationCodeEmail(email, code));
   }
 
   /**

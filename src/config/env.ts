@@ -12,6 +12,8 @@ const EnvSchema = t.Object({
     { default: "development" },
   ),
   PORT: t.Number({ default: 3000 }),
+  // Product name shown in transactional email (lib/mail-templates.ts).
+  APP_NAME: t.String({ default: "App" }),
 
   // Postgres connection string, e.g. postgres://user:pass@localhost:5432/app
   DATABASE_URL: t.String({ minLength: 1 }),
