@@ -1,6 +1,12 @@
 # Coverage settings apply when tests run with `--coverage` (see CI).
-# The threshold is a regression guard set just below current coverage; raise it
-# as coverage improves. `bun test` without --coverage is unaffected.
+# The threshold is a regression guard set just below current total coverage;
+# raise it as coverage improves. `bun test` without --coverage is unaffected.
+#
+# IMPORTANT: use the object form. Bun enforces a bare number (coverageThreshold
+# = 0.8) PER FILE, which infra files like logger.ts (0% function coverage — it
+# only constructs a logger) can never meet, so CI fails despite ~88% total. The
+# object form is enforced against the TOTAL across all files — the intended
+# regression guard.
 [test]
-coverageThreshold = 0.8
+coverageThreshold = { line = 0.8, function = 0.8, statement = 0.8 }
 coverageReporter = ["text", "lcov"]

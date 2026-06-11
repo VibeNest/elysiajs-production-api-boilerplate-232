@@ -106,8 +106,10 @@ process exits on missing/invalid values). To add a variable:
 - Run a single file: `bun test test/auth.test.ts`. Filter by name: `bun test -t "logs in"`.
 - Use `uniqueEmail()` for data isolation so tests don't collide across runs.
 - **Coverage:** CI runs `bun test --coverage` and fails below the
-  `coverageThreshold` in `bunfig.toml` (currently 0.8). Keep new code covered;
-  raise the floor as coverage improves.
+  `coverageThreshold` in `bunfig.toml` (currently 0.8 total). Keep new code
+  covered; raise the floor as coverage improves. Use the **object** form
+  (`{ line, function, statement }`) — Bun enforces a bare number per-file, which
+  infra files (e.g. `logger.ts`) can never satisfy; the object form is total.
 
 ## Error responses
 
