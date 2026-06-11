@@ -17,7 +17,7 @@ OpenAPI docs, tests, Docker and CI.
 - **Email:** SMTP via nodemailer (Mailtrap-ready); logs to console in dev without creds
 - **Logging:** Pino — pretty in dev, JSON in prod (stdout → any log aggregator); `LOG_LEVEL` configurable
 - **Rate limiting:** elysia-rate-limit (Redis-backed) — per-IP and per-user, opt-in per group
-- **Auth:** Access JWT (zero-downtime secret rotation via `JWT_SECRET_PREVIOUS`) + opaque rotating refresh tokens (hashed + family-tracked with reuse detection) + Bearer, `Bun.password` (argon2id) hashing, permission model, email verification (OTP), password reset
+- **Auth:** Access JWT (zero-downtime secret rotation via `JWT_SECRET_PREVIOUS`) + opaque rotating refresh tokens (hashed + family-tracked with reuse detection) + Bearer, `Bun.password` (argon2id) hashing, permission model, email verification (OTP), password reset, optional TOTP 2FA (authenticator apps)
 - **Observability:** Prometheus `/metrics`, deep `/ready` probe, append-only audit log for sensitive actions (with configurable retention), ops alert webhook for permanently failed jobs
 - **Hardening:** boot-time dependency fail-fast, security headers, request body-size limit, per-query statement timeout, deadline-bounded Redis ops, configurable Postgres pool
 - **Docs:** OpenAPI at `/openapi`
@@ -88,6 +88,7 @@ queue uses an inline "sync" driver, so no worker/Redis is needed.
 - `POST /auth/password/request-reset` · `POST /auth/password/reset` — public (forgotten password)
 - `GET /auth/me` · `POST /auth/logout` — authenticated
 - `POST /auth/email/request-otp` · `POST /auth/email/verify` — authenticated (email verification via OTP)
+- `POST /auth/2fa/setup` · `/2fa/enable` · `/2fa/disable` — authenticated (TOTP) · `POST /auth/2fa/verify` — public (completes an MFA login challenge)
 - `GET /users` · `GET /users/:id` · `PATCH`/`DELETE /users/:id` — permission-gated (self or admin; role changes admin-only; DELETE is a soft delete that revokes sessions and frees the email)
 
 Authenticate by sending `Authorization: Bearer <accessToken>`. With

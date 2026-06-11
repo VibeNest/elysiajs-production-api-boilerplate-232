@@ -164,6 +164,17 @@ not-found-route (404) and parse (400) are handled automatically.
   always 200) emails a code; `POST /auth/password/reset` verifies it, rehashes
   the password and revokes all sessions. Logic in
   [modules/auth/password-reset.service.ts](src/modules/auth/password-reset.service.ts).
+- **TOTP 2FA (opt-in per user):** `POST /auth/2fa/setup` (authed) stores a
+  pending secret and returns the `otpauth://` URI to QR-code;
+  `POST /auth/2fa/enable` goes live after the user echoes a valid code;
+  `POST /auth/2fa/disable` requires one too. With 2FA on, **login returns
+  `{ mfaRequired, mfaToken }`** (a hashed, 5-minute Redis challenge) instead of
+  tokens — the client completes via `POST /auth/2fa/verify { mfaToken, code }`
+  (in the stricter credential rate-limit group; 5 wrong codes burn the
+  challenge; accepted codes are single-use via a remembered counter). Logic in
+  [modules/auth/totp.service.ts](src/modules/auth/totp.service.ts). **No
+  recovery codes yet** — break-glass is an operator clearing
+  `totp_secret`/`totp_enabled_at` on the row.
 - Expired refresh tokens are swept hourly by the `token-cleanup` maintenance
   queue ([queue/maintenance.queue.ts](src/queue/maintenance.queue.ts)).
 - Login equalizes timing for unknown emails (dummy argon2 verify) to avoid
