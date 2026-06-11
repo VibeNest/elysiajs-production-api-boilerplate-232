@@ -33,6 +33,34 @@ const jsonHeaders = { headers: { "Content-Type": "application/json" } };
 // Per-VU session (k6 keeps module state per VU).
 let session = null;
 
+/**
+ * Works in both AUTH_TRANSPORT modes: bearer carries the refresh token in
+ * the JSON body; cookie mode omits it from the body and sets an httpOnly
+ * `refresh_token` cookie instead — capture it explicitly so the refresh
+ * step doesn't depend on jar behavior.
+ */
+function captureSession(res) {
+  const body = res.json();
+  const jarCookie = res.cookies.refresh_token;
+  session = {
+    accessToken: body.accessToken,
+    refreshToken: body.refreshToken || null, // bearer mode
+    refreshCookie: jarCookie && jarCookie[0] ? jarCookie[0].value : null,
+  };
+}
+
+function refreshRequest() {
+  const payload = session.refreshToken
+    ? JSON.stringify({ refreshToken: session.refreshToken })
+    : "{}";
+  const params = session.refreshCookie
+    ? Object.assign({}, jsonHeaders, {
+        cookies: { refresh_token: session.refreshCookie },
+      })
+    : jsonHeaders;
+  return http.post(`${BASE_URL}/auth/refresh`, payload, params);
+}
+
 export default function () {
   if (!session) {
     const email = `k6_${__VU}_${Date.now()}@example.com`;
@@ -46,11 +74,7 @@ export default function () {
       sleep(5); // likely rate-limited — back off and retry next iteration
       return;
     }
-    const body = res.json();
-    session = {
-      accessToken: body.accessToken,
-      refreshToken: body.refreshToken,
-    };
+    captureSession(res);
   }
 
   check(http.get(`${BASE_URL}/health`), {
@@ -66,19 +90,9 @@ export default function () {
   }
 
   if (__ITER % 60 === 30) {
-    const res = http.post(
-      `${BASE_URL}/auth/refresh`,
-      JSON.stringify({ refreshToken: session.refreshToken }),
-      jsonHeaders,
-    );
+    const res = refreshRequest();
     check(res, { "refresh 200": (r) => r.status === 200 });
-    if (res.status === 200) {
-      const body = res.json();
-      session = {
-        accessToken: body.accessToken,
-        refreshToken: body.refreshToken,
-      };
-    }
+    if (res.status === 200) captureSession(res);
   }
 
   sleep(1);
