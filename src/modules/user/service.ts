@@ -1,7 +1,8 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { BadRequestError, NotFoundError } from "@/lib/errors";
+import { toPublicUser } from "@/lib/user-public";
 import { AuthService } from "@/modules/auth/service";
 
 /** Soft delete: every read/write path must exclude deleted rows. */
@@ -17,21 +18,6 @@ const publicColumns = {
   createdAt: users.createdAt,
 };
 
-type UserRow = {
-  id: string;
-  email: string;
-  name: string | null;
-  role: "user" | "admin";
-  emailVerifiedAt: Date | null;
-  createdAt: Date;
-};
-
-/** Map a DB row to the public shape (timestamp → derived boolean). */
-const toPublic = ({ emailVerifiedAt, ...rest }: UserRow) => ({
-  ...rest,
-  emailVerified: emailVerifiedAt !== null,
-});
-
 /**
  * Example CRUD service. Copy this module (service + model + index) as the
  * starting point for new resources.
@@ -45,9 +31,10 @@ export abstract class UserService {
       .select(publicColumns)
       .from(users)
       .where(ownerId ? and(eq(users.id, ownerId), notDeleted) : notDeleted)
+      .orderBy(desc(users.createdAt), users.id)
       .limit(limit)
       .offset(offset);
-    return rows.map(toPublic);
+    return rows.map(toPublicUser);
   }
 
   static async getById(id: string) {
@@ -57,7 +44,7 @@ export abstract class UserService {
       .where(and(eq(users.id, id), notDeleted))
       .limit(1);
     if (!user) throw new NotFoundError("User not found");
-    return toPublic(user);
+    return toPublicUser(user);
   }
 
   static async update(
@@ -73,7 +60,7 @@ export abstract class UserService {
       .where(and(eq(users.id, id), notDeleted))
       .returning(publicColumns);
     if (!user) throw new NotFoundError("User not found");
-    return toPublic(user);
+    return toPublicUser(user);
   }
 
   /**

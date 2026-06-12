@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { api, body, json, registerUser } from "./helpers";
+import { api, body, json, registerUser, uniqueEmail } from "./helpers";
 
 describe("user authorization (permission model)", () => {
   let userA: Awaited<ReturnType<typeof registerUser>>;
@@ -117,5 +117,67 @@ describe("user authorization (permission model)", () => {
       headers: { Authorization: `Bearer ${userA.accessToken}` },
     });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("public user shape is consistent across modules", () => {
+  const PUBLIC_KEYS = [
+    "id",
+    "email",
+    "name",
+    "role",
+    "emailVerified",
+    "createdAt",
+  ].sort();
+
+  it("auth /register returns the full public-user shape including createdAt", async () => {
+    const res = await json("/auth/register", "POST", {
+      email: uniqueEmail(),
+      password: "supersecret",
+    });
+    const { user } = await body(res);
+    expect(Object.keys(user).sort()).toEqual(PUBLIC_KEYS);
+    expect(user.createdAt).toBeDefined();
+  });
+
+  it("users /:id returns the same shape", async () => {
+    const u = await registerUser();
+    const res = await json(`/users/${u.id}`, "GET", undefined, u.accessToken);
+    const dto = await body(res);
+    expect(Object.keys(dto).sort()).toEqual(PUBLIC_KEYS);
+  });
+});
+
+describe("list pagination is deterministic", () => {
+  it("returns a stable, non-overlapping order across pages", async () => {
+    const admin = await registerUser({ admin: true });
+    const createdIds = [admin.id];
+    // Seed extra users so paging spans multiple pages; the test's users are
+    // the newest rows, so they sort to the top of the createdAt-desc listing.
+    for (let i = 0; i < 5; i++) createdIds.push((await registerUser()).id);
+
+    const page = (limit: number, offset: number) =>
+      json(
+        `/users?limit=${limit}&offset=${offset}`,
+        "GET",
+        undefined,
+        admin.accessToken,
+      ).then(body);
+
+    const all = await page(100, 0);
+    const topIds = all
+      .map((u: { id: string }) => u.id)
+      .slice(0, createdIds.length);
+
+    // The newest `createdIds.length` rows are exactly this test's users.
+    expect(new Set(topIds)).toEqual(new Set(createdIds));
+    // No duplicates across the page boundary within that range.
+    expect(new Set(topIds).size).toBe(topIds.length);
+
+    // Stitching two consecutive pages reproduces the same order — no skips/repeats.
+    const first = await page(3, 0);
+    const second = await page(3, 3);
+    const stitched = [...first, ...second].map((u: { id: string }) => u.id);
+    expect(stitched).toEqual(topIds);
   });
 });

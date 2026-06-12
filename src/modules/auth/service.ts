@@ -2,6 +2,7 @@ import { and, eq, gt, isNull, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { refreshTokens, users } from "@/db/schema";
 import { recordAudit } from "@/lib/audit";
+import { isUniqueViolation } from "@/lib/db-errors";
 import { ConflictError, UnauthorizedError } from "@/lib/errors";
 import { sha256Hex } from "@/lib/hash";
 import { logger } from "@/lib/logger";
@@ -41,11 +42,19 @@ export abstract class AuthService {
       throw new ConflictError("Email already registered");
 
     const passwordHash = await Bun.password.hash(password);
-    const [user] = await db
-      .insert(users)
-      .values({ email, passwordHash, name })
-      .returning();
-    return user;
+    try {
+      const [user] = await db
+        .insert(users)
+        .values({ email, passwordHash, name })
+        .returning();
+      return user;
+    } catch (err) {
+      // Closes the race: two concurrent registrations can both pass the
+      // pre-check above, then the partial unique index rejects the loser.
+      if (isUniqueViolation(err))
+        throw new ConflictError("Email already registered");
+      throw err;
+    }
   }
 
   static async findById(id: string) {

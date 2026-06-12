@@ -128,6 +128,20 @@ describe("auth (requires a running database)", () => {
   });
 });
 
+describe("concurrent registration of the same email", () => {
+  it("returns exactly one 200 and one 409 — never a 500", async () => {
+    const email = uniqueEmail();
+    const reg = () =>
+      json("/auth/register", "POST", { email, password: "supersecret" });
+
+    const [a, b] = await Promise.all([reg(), reg()]);
+    const statuses = [a.status, b.status].sort();
+
+    expect(statuses).toEqual([200, 409]);
+    expect(statuses).not.toContain(500);
+  });
+});
+
 describe("auth cookie transport (requires a running database)", () => {
   const COOKIE = "refresh_token";
   let restore: () => void;

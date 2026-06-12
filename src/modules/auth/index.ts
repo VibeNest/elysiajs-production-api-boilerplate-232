@@ -7,6 +7,7 @@ import { clientIp } from "@/lib/ip";
 import { signAccessToken } from "@/lib/jwt";
 import { assertTrustedOrigin } from "@/lib/origin";
 import { durationToMs } from "@/lib/time";
+import { toPublicUser } from "@/lib/user-public";
 import { authPlugin } from "@/plugins/auth";
 import { loggerPlugin } from "@/plugins/logger";
 import { ipRateLimit } from "@/plugins/rate-limit";
@@ -68,20 +69,6 @@ async function issueTokens(
   }
   return { accessToken, refreshToken };
 }
-
-const toPublicUser = (u: {
-  id: string;
-  email: string;
-  name: string | null;
-  role: "user" | "admin";
-  emailVerifiedAt: Date | null;
-}) => ({
-  id: u.id,
-  email: u.email,
-  name: u.name,
-  role: u.role,
-  emailVerified: u.emailVerifiedAt !== null,
-});
 
 /**
  * Credential routes carry a stricter per-IP limit than the rest of /auth —

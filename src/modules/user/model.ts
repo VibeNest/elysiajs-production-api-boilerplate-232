@@ -1,19 +1,6 @@
 import { t } from "elysia";
-import { dbSchema } from "@/db/model";
 import { sanitizedString } from "@/lib/sanitize";
-
-// Compose request/response schemas from the Drizzle-derived column schemas
-// (single source of truth — see db/model.ts).
-const cols = dbSchema.select.users;
-
-const publicUser = t.Object({
-  id: cols.id,
-  email: cols.email,
-  name: cols.name,
-  role: cols.role,
-  emailVerified: t.Boolean(),
-  createdAt: cols.createdAt,
-});
+import { publicUser } from "@/lib/user-public";
 
 export const userModel = {
   publicUser,

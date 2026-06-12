@@ -1,14 +1,6 @@
 import { t } from "elysia";
 import { sanitizedString } from "@/lib/sanitize";
-
-/** Public-safe representation of a user (never includes the password hash). */
-export const publicUser = t.Object({
-  id: t.String(),
-  email: t.String({ format: "email" }),
-  name: t.Nullable(t.String()),
-  role: t.Union([t.Literal("user"), t.Literal("admin")]),
-  emailVerified: t.Boolean(),
-});
+import { publicUser } from "@/lib/user-public";
 
 const tokenResponse = t.Object({
   accessToken: t.String(),
