@@ -21,6 +21,10 @@ services:
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-app}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}
+      # Rotated log files land here on a named volume so they outlive the container.
+      LOG_DIR: /var/log/app
+    volumes:
+      - applogs:/var/log/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,6 +43,10 @@ services:
       # The worker is where queue jobs run — and where their final-failure
       # alerts fire from.
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      # Separate volume from the API so the two processes never write the same file.
+      LOG_DIR: /var/log/app
+    volumes:
+      - workerlogs:/var/log/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,3 +79,5 @@ services:
 
 volumes:
   pgdata:
+  applogs:
+  workerlogs:

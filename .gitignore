@@ -35,6 +35,9 @@ yarn-error.log*
 /server
 /worker
 
+# local log files (LOG_DIR — rotated logs incl. .log.gz)
+/logs
+
 # vercel
 .vercel
 

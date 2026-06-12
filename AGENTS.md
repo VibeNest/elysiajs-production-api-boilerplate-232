@@ -214,8 +214,18 @@ not-found-route (404) and parse (400) are handled automatically.
 ## Logging
 
 - Structured logging via **Pino** ([src/lib/logger.ts](src/lib/logger.ts)). Dev →
-  human-readable (pino-pretty); prod → single-line JSON on stdout (for
-  Loki/Datadog/CloudWatch); tests → silent. Level via `LOG_LEVEL`.
+  human-readable console (pino-pretty) **and** a rotated JSON file; prod →
+  rotated single-line JSON file only; tests → silent. Level via `LOG_LEVEL`.
+- **File rotation** via `rotating-file-stream`, used as a plain stream (no worker
+  thread, so it survives `bun build --compile` like the pretty stream). Files
+  live in `LOG_DIR` (`LOG_FILE`, default `app.log`), rotate daily
+  (`LOG_ROTATE_INTERVAL`) or when they pass `LOG_ROTATE_SIZE` — whichever first —
+  and `LOG_MAX_FILES` rotated files are kept, gzipped when `LOG_COMPRESS`.
+  Graceful shutdown calls `closeLogger()` so buffered writes flush before exit.
+  In Docker the log dir is a named volume (`applogs`, mounted at `/var/log/app`
+  in [docker-compose.prod.yml](docker-compose.prod.yml)) so logs outlive the
+  container. Ship them with a sidecar/agent tailing that volume, or point your
+  log shipper at it.
 - **Never use `console.*`** — use `logger` (app-wide) or a child logger. The one
   exception is [config/env.ts](src/config/env.ts), which runs before the logger exists.
 - In request handlers/services, prefer the request-scoped `log` from the context
