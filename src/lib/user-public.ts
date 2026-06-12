@@ -14,6 +14,7 @@ export const publicUser = t.Object({
   name: cols.name,
   role: cols.role,
   emailVerified: t.Boolean(),
+  totpEnabled: t.Boolean(),
   createdAt: cols.createdAt,
 });
 
@@ -24,6 +25,7 @@ type PublicUserInput = {
   name: string | null;
   role: "user" | "admin";
   emailVerifiedAt: Date | null;
+  totpEnabledAt: Date | null;
   createdAt: Date;
 };
 
@@ -40,5 +42,6 @@ export const toPublicUser = (
   name: u.name,
   role: u.role,
   emailVerified: u.emailVerifiedAt !== null,
+  totpEnabled: u.totpEnabledAt !== null,
   createdAt: u.createdAt,
 });

@@ -15,6 +15,7 @@ const publicColumns = {
   name: users.name,
   role: users.role,
   emailVerifiedAt: users.emailVerifiedAt,
+  totpEnabledAt: users.totpEnabledAt,
   createdAt: users.createdAt,
 };
 

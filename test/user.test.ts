@@ -127,6 +127,7 @@ describe("public user shape is consistent across modules", () => {
     "name",
     "role",
     "emailVerified",
+    "totpEnabled",
     "createdAt",
   ].sort();
 
@@ -145,6 +146,24 @@ describe("public user shape is consistent across modules", () => {
     const res = await json(`/users/${u.id}`, "GET", undefined, u.accessToken);
     const dto = await body(res);
     expect(Object.keys(dto).sort()).toEqual(PUBLIC_KEYS);
+  });
+});
+
+describe("public user exposes totpEnabled", () => {
+  it("is false for a freshly registered user", async () => {
+    const res = await json("/auth/register", "POST", {
+      email: uniqueEmail(),
+      password: "supersecret",
+    });
+    const { user } = await body(res);
+    expect(user.totpEnabled).toBe(false);
+  });
+
+  it("is present on the users/:id DTO", async () => {
+    const u = await registerUser();
+    const res = await json(`/users/${u.id}`, "GET", undefined, u.accessToken);
+    const dto = await body(res);
+    expect(dto.totpEnabled).toBe(false);
   });
 });
 
