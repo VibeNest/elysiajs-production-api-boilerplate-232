@@ -1,4 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { users } from "@/db/schema";
 import { api, body, json, registerUser, uniqueEmail } from "./helpers";
 
 describe("user authorization (permission model)", () => {
@@ -159,11 +162,16 @@ describe("public user exposes totpEnabled", () => {
     expect(user.totpEnabled).toBe(false);
   });
 
-  it("is present on the users/:id DTO", async () => {
+  it("is true once totpEnabledAt is set", async () => {
     const u = await registerUser();
+    await db
+      .update(users)
+      .set({ totpEnabledAt: new Date() })
+      .where(eq(users.id, u.id));
+
     const res = await json(`/users/${u.id}`, "GET", undefined, u.accessToken);
     const dto = await body(res);
-    expect(dto.totpEnabled).toBe(false);
+    expect(dto.totpEnabled).toBe(true);
   });
 });
 
