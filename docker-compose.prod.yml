@@ -1,12 +1,7 @@
-# Full stack: API (built from the Dockerfile) + Postgres.
-# Run migrations against the database before/after first boot:
-#   DATABASE_URL=postgres://postgres:postgres@localhost:5432/app bun run db:migrate
 services:
   app:
     build: .
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -16,21 +11,19 @@ services:
       JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
-      # Tracing — when enabling, point the endpoint at YOUR collector
-      # (inside a container "localhost:4318" is the container itself).
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-app}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}
-      # Rotated log files land here on a named volume so they outlive the container.
       LOG_DIR: /var/log/app
     volumes:
-      - applogs:/var/log/app
+    - applogs:/var/log/app
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-
+    expose:
+    - "3000"
   worker:
     build: .
     restart: unless-stopped
@@ -40,19 +33,15 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/app
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
-      # The worker is where queue jobs run — and where their final-failure
-      # alerts fire from.
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
-      # Separate volume from the API so the two processes never write the same file.
       LOG_DIR: /var/log/app
     volumes:
-      - workerlogs:/var/log/app
+    - workerlogs:/var/log/app
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -61,13 +50,12 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: app
     volumes:
-      - pgdata:/var/lib/postgresql/data
+    - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
-
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -76,8 +64,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
 volumes:
-  pgdata:
-  applogs:
+  pgdata: 
+  applogs: 
   workerlogs:
